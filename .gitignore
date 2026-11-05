@@ -54,6 +54,9 @@ storage/pdfs/*
 .coverage
 htmlcov/
 
+# Readme
+README.md
+
 # OS
 .DS_Store
 Thumbs.db
