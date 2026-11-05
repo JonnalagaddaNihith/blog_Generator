@@ -1,0 +1,15 @@
+use_default_settings: true
+
+general:
+  instance_name: "Local SearXNG"
+
+server:
+  secret_key: "replace-this-with-a-long-random-secret-before-use"
+  limiter: false
+  image_proxy: true
+
+search:
+  safe_search: 0
+  formats:
+    - html
+    - json
