@@ -39,7 +39,7 @@ services:
     volumes:
       - ./searxng:/etc/searxng
     environment:
-      - SEARXNG_BASE_URL=http://localhost:8080/
+      - SEARXNG_BASE_URL=${SEARXNG_BASE_URL}
     restart: unless-stopped
 
   app:
@@ -50,19 +50,19 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/blog_generator
-      - DATABASE_SYNC_URL=postgresql://postgres:postgres@postgres:5432/blog_generator
-      - REDIS_URL=redis://redis:6379/0
-      - SEARXNG_URL=http://searxng:8080
+      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_SYNC_URL=${DATABASE_SYNC_URL}
+      - REDIS_URL=${REDIS_URL}
+      - SEARXNG_URL=${SEARXNG_URL}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - OPENROUTER_TEXT_MODEL=deepseek/deepseek-v4-pro-0813
-      - OPENROUTER_IMAGE_MODEL=qwen/qwen-image-2.1-turbo
-      - LANGGRAPH_CHECKPOINT_TYPE=postgres
-      - STORAGE_IMAGES_PATH=./storage/images
-      - STORAGE_PDFS_PATH=./storage/pdfs
-      - LOG_LEVEL=INFO
-      - APP_HOST=0.0.0.0
-      - APP_PORT=8000
+      - OPENROUTER_TEXT_MODEL=${OPENROUTER_TEXT_MODEL}
+      - OPENROUTER_IMAGE_MODEL=${OPENROUTER_IMAGE_MODEL}
+      - LANGGRAPH_CHECKPOINT_TYPE=${LANGGRAPH_CHECKPOINT_TYPE}
+      - STORAGE_IMAGES_PATH=${STORAGE_IMAGES_PATH}
+      - STORAGE_PDFS_PATH=${STORAGE_PDFS_PATH}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - APP_HOST=${APP_HOST}
+      - APP_PORT=${APP_PORT}
     volumes:
       - ./storage:/app/storage
       - ./alembic:/app/alembic

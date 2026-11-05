@@ -14,7 +14,7 @@ router = APIRouter()
 class WorkflowApprovalRequest(BaseModel):
     action: str  # "approve", "reject", or "regenerate"
     updated_outline: dict = None
-    regenerate_section: str = None  # "outline", "blog_content", "seo", "image", or "all"
+    regenerate_section: str = None  # "outline", "blog_content", "seo", "image", "verification", or "all"
 
 
 @router.post("/projects/{project_id}/workflow/start")

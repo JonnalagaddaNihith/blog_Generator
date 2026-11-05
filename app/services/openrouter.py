@@ -85,6 +85,10 @@ class OpenRouterService:
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": dynamic_max,
                 "temperature": temperature,
+                # Reasoning models (e.g. Nemotron) return content=None and put
+                # output in `reasoning`, often truncated. Disable reasoning so
+                # the answer lands in `content`.
+                "reasoning": {"enabled": False},
             }
 
             async with httpx.AsyncClient(timeout=self.timeout) as client:

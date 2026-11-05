@@ -15,6 +15,20 @@ from app.agents import (
 )
 from app.database import AsyncSessionLocal
 from app.config import settings
+from app.models import (
+    Outline,
+    BlogVersion,
+    SEOMetadata,
+    ImageGeneration,
+    QualityReport,
+    FactVerificationReport,
+    Approval,
+)
+from app.models.outline import OutlineStatus
+from app.models.blog import BlogStatus
+from app.models.approval import ApprovalStage, ApprovalStatus
+from sqlalchemy import select, delete
+from datetime import datetime
 from app.utils.logger import logger
 import operator
 
@@ -41,21 +55,27 @@ class WorkflowState(TypedDict):
     # Approval fields
     approval_status: Literal["pending", "approved", "rejected", "regenerate"]
     approval_stage: Literal["blog_strategy", "final_review", None]
-    regenerate_section: Literal["outline", "blog_content", "seo", "image", "all", None]
+    regenerate_section: Literal["outline", "blog_content", "seo", "image", "verification", "all", None]
+    # ID of the persisted BlogVersion row (set when workflow completes)
+    blog_version_id: int
 
 
 class BlogGenerationWorkflow:
     def __init__(self):
         self.graph = None
         self.checkpointer = None
+        self._checkpointer_cm = None
 
     async def _get_checkpointer(self):
         """Initialize checkpointer for LangGraph (Postgres or Memory)."""
         if self.checkpointer is None:
             try:
                 if settings.langgraph_checkpoint_type == "postgres":
-                    # Use AsyncPostgresSaver for PostgreSQL-backed state persistence
-                    self.checkpointer = AsyncPostgresSaver.from_conn_string(settings.database_sync_url)
+                    # from_conn_string() returns an async context manager;
+                    # enter it once and keep it alive for the app lifetime.
+                    self._checkpointer_cm = AsyncPostgresSaver.from_conn_string(settings.database_sync_url)
+                    self.checkpointer = await self._checkpointer_cm.__aenter__()
+                    await self.checkpointer.setup()
                     logger.info("LangGraph checkpointer initialized with AsyncPostgresSaver")
                 else:
                     self.checkpointer = MemorySaver()
@@ -79,7 +99,7 @@ class BlogGenerationWorkflow:
         workflow.add_node("blog_strategy", self._blog_strategy_node)
         workflow.add_node("blog_writing", self._blog_writing_node)
         workflow.add_node("seo", self._seo_node)
-        workflow.add_node("image", self._image_node)
+        # workflow.add_node("image", self._image_node)
         workflow.add_node("quality", self._quality_node)
         workflow.add_node("fact_verification", self._fact_verification_node)
 
@@ -89,8 +109,9 @@ class BlogGenerationWorkflow:
         workflow.add_node("regenerate_outline", self._regenerate_outline_node)
         workflow.add_node("regenerate_blog", self._regenerate_blog_node)
         workflow.add_node("regenerate_seo", self._regenerate_seo_node)
-        workflow.add_node("regenerate_image", self._regenerate_image_node)
+        # workflow.add_node("regenerate_image", self._regenerate_image_node)
         workflow.add_node("regenerate_all", self._regenerate_all_node)
+        workflow.add_node("regenerate_verification", self._regenerate_verification_node)
 
         # Stage 1: Research to Outline
         workflow.set_entry_point("web_research")
@@ -112,8 +133,9 @@ class BlogGenerationWorkflow:
 
         # Stage 2: Writing to Final Verification
         workflow.add_edge("blog_writing", "seo")
-        workflow.add_edge("seo", "image")
-        workflow.add_edge("image", "quality")
+        # workflow.add_edge("seo", "image")
+        # workflow.add_edge("image", "quality")
+        workflow.add_edge("seo", "quality")
         workflow.add_edge("quality", "fact_verification")
 
         # Final approval checkpoint
@@ -126,22 +148,39 @@ class BlogGenerationWorkflow:
                 "regenerate_outline": "regenerate_outline",
                 "regenerate_blog": "regenerate_blog",
                 "regenerate_seo": "regenerate_seo",
-                "regenerate_image": "regenerate_image",
+                # "regenerate_image": "regenerate_image",
+                "regenerate_verification": "regenerate_verification",
                 "regenerate_all": "regenerate_all",
                 "pending": END  # Wait for human approval
             }
         )
 
-        # Regeneration loops back to appropriate stage
-        workflow.add_edge("regenerate_outline", "blog_strategy_approval")
-        workflow.add_edge("regenerate_blog", "seo")
-        workflow.add_edge("regenerate_seo", "image")
-        workflow.add_edge("regenerate_image", "quality")
-        workflow.add_edge("regenerate_all", "blog_writing")
+        # Regeneration loops: each re-runs only its own node, then returns to
+        # the final approval checkpoint. State (outline, content, keywords,
+        # research) is read from the checkpoint — nothing upstream re-runs.
+        workflow.add_edge("regenerate_blog", "final_approval")
+        workflow.add_edge("regenerate_seo", "final_approval")
+        # workflow.add_edge("regenerate_image", "final_approval")
+        workflow.add_edge("regenerate_verification", "fact_verification")
+        # regenerate_all already produces blog+seo+image; continue to quality
+        # and fact verification so reports stay consistent (avoids re-running
+        # blog_writing/seo/image a second time).
+        workflow.add_edge("regenerate_all", "quality")
 
-        # Compile with checkpointer
+        # Regenerate outline is reachable from both approval checkpoints and
+        # always returns to the first approval gate: a new outline invalidates
+        # any downstream content, so the user must approve the outline again
+        # before blog content, SEO, etc. are generated.
+        workflow.add_edge("regenerate_outline", "blog_strategy_approval")
+
+        # Compile with checkpointer. interrupt_before pauses the graph BEFORE
+        # the approval nodes execute, so the thread stays resumable (unlike
+        # routing "pending" to END, which terminates the thread).
         checkpointer = await self._get_checkpointer()
-        self.graph = workflow.compile(checkpointer=checkpointer)
+        self.graph = workflow.compile(
+            checkpointer=checkpointer,
+            interrupt_before=["blog_strategy_approval", "final_approval"],
+        )
 
         logger.info("LangGraph workflow built successfully")
         return self.graph
@@ -222,18 +261,6 @@ class BlogGenerationWorkflow:
         state["current_stage"] = "seo"
         return state
 
-    async def _image_node(self, state: WorkflowState) -> WorkflowState:
-        """Execute image agent."""
-        logger.info("Executing image node")
-        result = await image_agent.execute(
-            topic=state["topic"],
-            content=state["blog_content"],
-            tone=state["tone"],
-        )
-        state["image_details"] = result
-        state["current_stage"] = "image"
-        return state
-
     async def _quality_node(self, state: WorkflowState) -> WorkflowState:
         """Execute quality agent."""
         logger.info("Executing quality node")
@@ -284,26 +311,30 @@ class BlogGenerationWorkflow:
             return "approved"
         elif approval == "regenerate":
             regenerate_section = state.get("regenerate_section", "all")
+            # "blog_content" maps to the "regenerate_blog" node
+            if regenerate_section == "blog_content":
+                regenerate_section = "blog"
             return f"regenerate_{regenerate_section}"
         else:
             return "pending"
 
     async def _regenerate_outline_node(self, state: WorkflowState) -> WorkflowState:
-        """Regenerate outline (either via agent or user edit)."""
+        """Regenerate the outline via the blog strategy agent."""
         logger.info("Regenerating outline")
         state["current_stage"] = "regenerate_outline"
-        # If outline was manually edited, it's already in state
-        # Otherwise, regenerate via agent
-        if not state.get("outline") or state.get("regenerate_section") == "outline":
-            result = await blog_strategy_agent.execute(
-                topic=state["topic"],
-                target_word_count=state["target_word_count"],
-                audience=state["audience"],
-                tone=state["tone"],
-                keywords=state["keywords"],
-                competitor_analysis=state["competitor_analysis"],
-            )
-            state["outline"] = result
+        # Reaching this node means the user asked for a new outline, so always
+        # regenerate via the agent regardless of regenerate_section. The
+        # approval is reset to the first gate: the user can then edit the
+        # outline, regenerate again, or approve it to resume content generation.
+        result = await blog_strategy_agent.execute(
+            topic=state["topic"],
+            target_word_count=state["target_word_count"],
+            audience=state["audience"],
+            tone=state["tone"],
+            keywords=state["keywords"],
+            competitor_analysis=state["competitor_analysis"],
+        )
+        state["outline"] = result
         state["approval_status"] = "pending"
         state["approval_stage"] = "blog_strategy"
         return state
@@ -320,6 +351,8 @@ class BlogGenerationWorkflow:
             audience=state["audience"],
         )
         state["blog_content"] = result.get("content", "")
+        state["approval_status"] = "pending"
+        state["approval_stage"] = "final_review"
         return state
 
     async def _regenerate_seo_node(self, state: WorkflowState) -> WorkflowState:
@@ -332,6 +365,8 @@ class BlogGenerationWorkflow:
             keywords=state["keywords"],
         )
         state["seo_metadata"] = result
+        state["approval_status"] = "pending"
+        state["approval_stage"] = "final_review"
         return state
 
     async def _regenerate_image_node(self, state: WorkflowState) -> WorkflowState:
@@ -344,6 +379,15 @@ class BlogGenerationWorkflow:
             tone=state["tone"],
         )
         state["image_details"] = result
+        state["approval_status"] = "pending"
+        state["approval_stage"] = "final_review"
+        return state
+
+    async def _regenerate_verification_node(self, state: WorkflowState) -> WorkflowState:
+        """Re-run fact verification only, keeping all other outputs."""
+        logger.info("Regenerating fact verification")
+        state["current_stage"] = "regenerate_verification"
+        state["fact_verification_report"] = {}
         return state
 
     async def _regenerate_all_node(self, state: WorkflowState) -> WorkflowState:
@@ -412,6 +456,7 @@ class BlogGenerationWorkflow:
             "approval_status": "pending",
             "approval_stage": None,
             "regenerate_section": None,
+            "blog_version_id": 0,
         }
 
         # Use project_id as thread_id for simplicity
@@ -453,18 +498,20 @@ class BlogGenerationWorkflow:
 
         # Build update dict with only the fields that changed
         update_dict = {}
-        
+        current_state = await graph.aget_state(config)
+        current_stage = current_state.values.get("approval_stage") if current_state.values else None
+
         # Update approval status
         if action == "approve":
             update_dict["approval_status"] = "approved"
-            logger.info(f"Workflow approved at stage: {current_state.values.get('approval_stage')}")
+            logger.info(f"Workflow approved at stage: {current_stage}")
         elif action == "regenerate":
             update_dict["approval_status"] = "regenerate"
             update_dict["regenerate_section"] = regenerate_section or "all"
             logger.info(f"Workflow regeneration requested for: {regenerate_section}")
         else:
             update_dict["approval_status"] = "rejected"
-            logger.info(f"Workflow rejected at stage: {current_state.values.get('approval_stage')}")
+            logger.info(f"Workflow rejected at stage: {current_stage}")
 
         # Update outline if provided
         if updated_outline:
@@ -478,7 +525,182 @@ class BlogGenerationWorkflow:
         result = await graph.ainvoke(None, config)
         logger.info(f"Workflow resumed successfully")
 
+        # If the graph ran to completion with an approval, persist outputs to DB
+        final_state = await graph.aget_state(config)
+        if (
+            final_state.values
+            and len(final_state.next) == 0
+            and final_state.values.get("approval_status") == "approved"
+        ):
+            try:
+                blog_version_id = await self._persist_workflow_output(final_state.values)
+                if blog_version_id:
+                    await graph.aupdate_state(config, {"blog_version_id": blog_version_id})
+            except Exception as e:
+                logger.error(f"Failed to persist workflow output: {e}")
+
         return result
+
+    async def _persist_workflow_output(self, state: Dict[str, Any]) -> int:
+        """
+        Save final workflow output to the database so the REST APIs
+        (blogs, SEO metadata, reports, approvals, PDF export) work.
+        Upserts the latest Outline/BlogVersion for the project.
+        Returns the BlogVersion id.
+        """
+        project_id = state.get("project_id")
+        if not project_id or not state.get("blog_content"):
+            return 0
+
+        async with AsyncSessionLocal() as db:
+            # --- Outline (latest for project) ---
+            outline_row = (
+                await db.execute(
+                    select(Outline)
+                    .where(Outline.project_id == project_id)
+                    .order_by(Outline.id.desc())
+                )
+            ).scalars().first()
+            outline_data = state.get("outline") or {}
+            if outline_row:
+                outline_row.structure = outline_data
+                outline_row.status = OutlineStatus.approved
+            else:
+                outline_row = Outline(
+                    project_id=project_id,
+                    structure=outline_data,
+                    status=OutlineStatus.approved,
+                )
+                db.add(outline_row)
+            await db.flush()
+
+            # --- Blog version (latest for project) ---
+            blog = (
+                await db.execute(
+                    select(BlogVersion)
+                    .where(BlogVersion.project_id == project_id)
+                    .order_by(BlogVersion.id.desc())
+                )
+            ).scalars().first()
+            if blog:
+                blog.content = state.get("blog_content")
+                blog.outline_id = outline_row.id
+                blog.status = BlogStatus.approved
+            else:
+                blog = BlogVersion(
+                    project_id=project_id,
+                    outline_id=outline_row.id,
+                    content=state.get("blog_content"),
+                    status=BlogStatus.approved,
+                )
+                db.add(blog)
+            await db.flush()
+
+            # --- SEO metadata (one per blog version) ---
+            seo = state.get("seo_metadata") or {}
+            seo_row = (
+                await db.execute(
+                    select(SEOMetadata).where(SEOMetadata.blog_version_id == blog.id)
+                )
+            ).scalars().first()
+            seo_fields = {
+                "title": seo.get("title"),
+                "meta_description": seo.get("meta_description"),
+                "keywords": seo.get("keyword_density"),
+            }
+            if seo_row:
+                for field, value in seo_fields.items():
+                    setattr(seo_row, field, value)
+            else:
+                db.add(SEOMetadata(blog_version_id=blog.id, **seo_fields))
+
+            # --- Image generation (optional; only present if image agent ran) ---
+            image = state.get("image_details") or {}
+            if image.get("image_path"):
+                img_row = (
+                    await db.execute(
+                        select(ImageGeneration).where(
+                            ImageGeneration.blog_version_id == blog.id
+                        )
+                    )
+                ).scalars().first()
+                img_fields = {
+                    "prompt": image.get("prompt"),
+                    "image_path": image.get("image_path"),
+                    "model_used": image.get("model_used"),
+                }
+                if img_row:
+                    for field, value in img_fields.items():
+                        setattr(img_row, field, value)
+                else:
+                    db.add(ImageGeneration(blog_version_id=blog.id, **img_fields))
+
+            # --- Quality report ---
+            quality = state.get("quality_report") or {}
+            quality_row = (
+                await db.execute(
+                    select(QualityReport).where(QualityReport.blog_version_id == blog.id)
+                )
+            ).scalars().first()
+            quality_fields = {
+                "grammar_score": quality.get("grammar_score"),
+                "readability_score": quality.get("readability_score"),
+                "issues": quality.get("issues"),
+            }
+            if quality_row:
+                for field, value in quality_fields.items():
+                    setattr(quality_row, field, value)
+            else:
+                db.add(QualityReport(blog_version_id=blog.id, **quality_fields))
+
+            # --- Fact verification report ---
+            verification = state.get("fact_verification_report") or {}
+            verification_row = (
+                await db.execute(
+                    select(FactVerificationReport).where(
+                        FactVerificationReport.blog_version_id == blog.id
+                    )
+                )
+            ).scalars().first()
+            verification_fields = {
+                "claims_verified": verification.get("claims_verified"),
+                "sources": verification.get("sources"),
+                "confidence_score": verification.get("confidence_score"),
+            }
+            if verification_row:
+                for field, value in verification_fields.items():
+                    setattr(verification_row, field, value)
+            else:
+                db.add(FactVerificationReport(blog_version_id=blog.id, **verification_fields))
+
+            # --- Approval records (replace existing for idempotency) ---
+            await db.execute(
+                delete(Approval).where(Approval.blog_version_id == blog.id)
+            )
+            now = datetime.utcnow()
+            db.add(
+                Approval(
+                    blog_version_id=blog.id,
+                    stage=ApprovalStage.outline,
+                    status=ApprovalStatus.approved,
+                    approved_at=now,
+                )
+            )
+            db.add(
+                Approval(
+                    blog_version_id=blog.id,
+                    stage=ApprovalStage.final,
+                    status=ApprovalStatus.approved,
+                    approved_at=now,
+                )
+            )
+
+            await db.commit()
+            logger.info(
+                f"Persisted workflow output for project {project_id}: "
+                f"outline_id={outline_row.id}, blog_version_id={blog.id}"
+            )
+            return blog.id
 
     async def get_workflow_status(self, project_id: int) -> Dict[str, Any]:
         """
@@ -490,6 +712,13 @@ class BlogGenerationWorkflow:
 
         state = await graph.aget_state(config)
         current_stage = state.values.get("current_stage", "unknown") if state.values else "not_started"
+        # While interrupted before an approval node, current_stage still shows
+        # the last executed node — report the gate the workflow is paused at.
+        next_nodes = state.next if state else []
+        if "blog_strategy_approval" in next_nodes:
+            current_stage = "blog_strategy_approval"
+        elif "final_approval" in next_nodes:
+            current_stage = "final_approval"
         approval_status = state.values.get("approval_status", "none") if state.values else "none"
         approval_stage = state.values.get("approval_stage", None) if state.values else None
         
@@ -502,8 +731,9 @@ class BlogGenerationWorkflow:
             "approval_status": approval_status,
             "approval_stage": approval_stage,
             "is_waiting_approval": is_waiting_approval,
-            "next": state.next if state else [],
-            "is_complete": state.next == [] if state else False,
+            "next": next_nodes,
+            # state.next is a tuple; () means the graph ran to END
+            "is_complete": len(next_nodes) == 0,
             # Include relevant data based on stage
             "outline": state.values.get("outline", {}) if state.values else {},
             "blog_content": state.values.get("blog_content", "") if state.values else "",
@@ -511,6 +741,7 @@ class BlogGenerationWorkflow:
             "image_details": state.values.get("image_details", {}) if state.values else {},
             "quality_report": state.values.get("quality_report", {}) if state.values else {},
             "fact_verification_report": state.values.get("fact_verification_report", {}) if state.values else {},
+            "blog_version_id": state.values.get("blog_version_id", 0) if state.values else 0,
         }
 
 

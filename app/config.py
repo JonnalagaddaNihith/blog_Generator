@@ -12,6 +12,7 @@ class Settings(BaseSettings):
 
     # SearXNG
     searxng_url: str
+    searxng_base_url: Optional[str] = None
 
     # OpenRouter
     openrouter_api_key: str
