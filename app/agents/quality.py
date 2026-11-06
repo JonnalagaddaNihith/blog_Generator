@@ -1,7 +1,24 @@
 from typing import Dict, Any, List
 import json
+import textstat
 from app.services.openrouter import openrouter_service
+from app.services.languagetool import languagetool_service
 from app.utils.logger import logger, extract_json_from_llm_response
+
+
+def compute_readability_metrics(content: str) -> Dict[str, Any]:
+    """Deterministic readability metrics via textstat."""
+    try:
+        return {
+            "word_count": textstat.lexicon_count(content, removepunct=True),
+            "sentence_count": textstat.sentence_count(content),
+            "avg_sentence_length": round(textstat.avg_sentence_length(content), 2),
+            "flesch_reading_ease": round(textstat.flesch_reading_ease(content), 2),
+            "flesch_kincaid_grade": round(textstat.flesch_kincaid_grade(content), 2),
+            "smog_index": round(textstat.smog_index(content), 2),
+        }
+    except Exception:
+        return {}
 
 
 class QualityAgent:
@@ -69,7 +86,12 @@ Return the result as a JSON object with this structure:
             
             quality_data = json.loads(json_str)
 
-            logger.info(f"Quality validation completed: grammar={quality_data.get('grammar_score')}, readability={quality_data.get('readability_score')}")
+            # Deterministic checks: textstat readability metrics + LanguageTool
+            # grammar/style issues (real proofreading engine, not LLM guesswork)
+            readability_metrics = compute_readability_metrics(content)
+            lt_result = await languagetool_service.check(content)
+
+            logger.info(f"Quality validation completed: grammar={quality_data.get('grammar_score')}, readability={quality_data.get('readability_score')}, languagetool_issues={lt_result.get('issue_count')}")
 
             return {
                 "agent": "quality",
@@ -77,6 +99,9 @@ Return the result as a JSON object with this structure:
                 "readability_score": quality_data.get("readability_score", 0),
                 "issues": quality_data.get("issues", []),
                 "overall_assessment": quality_data.get("overall_assessment", ""),
+                "readability_metrics": readability_metrics,
+                "grammar_issue_count": lt_result.get("issue_count", 0),
+                "grammar_issues": lt_result.get("issues", []),
             }
 
         except Exception as e:

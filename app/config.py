@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     openrouter_text_model: str
     openrouter_image_model: str
 
+    # Google APIs (optional — Fact Check Tools, Rich Results Test)
+    google_api_key: Optional[str] = None
+
     # LangGraph
     langgraph_checkpoint_type: str
 

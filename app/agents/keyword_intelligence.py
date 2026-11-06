@@ -1,6 +1,7 @@
 from typing import Dict, Any, List
 import json
 from app.services.openrouter import openrouter_service
+from app.services.google_suggestions import google_suggestions_service
 from app.utils.logger import logger, extract_json_from_llm_response
 
 
@@ -8,6 +9,19 @@ class KeywordIntelligenceAgent:
     """
     Keyword Intelligence Agent - Extract primary, secondary, and long-tail keywords.
     """
+
+    @staticmethod
+    def _to_search_phrase(topic: str) -> str:
+        """
+        Convert a question-style topic into a shorter search phrase that
+        Google autocomplete responds to (e.g. drop trailing '?').
+        """
+        phrase = topic.strip().rstrip("?").strip()
+        # If still long, keep first 6 words as the seed
+        words = phrase.split()
+        if len(words) > 6:
+            phrase = " ".join(words[:6])
+        return phrase
 
     async def execute(self, topic: str, research_results: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
@@ -23,6 +37,13 @@ class KeywordIntelligenceAgent:
                 for r in research_results[:10]
             ])
 
+            # Ground keyword extraction in real Google search suggestions.
+            # Autocomplete returns empty for long question-style queries, so
+            # normalize the topic into a shorter search phrase first.
+            topic_seed = self._to_search_phrase(topic)
+            google_suggestions = await google_suggestions_service.get_suggestions(topic_seed, max_results=10)
+            suggestions_context = "\n".join(f"- {s}" for s in google_suggestions) or "(none)"
+
             # Calculate char limit first
             char_limit = openrouter_service._calculate_char_limit(
                 f"Based on the following research results for the topic \"{topic}\", extract keywords:\n\nResearch Context:\n{context}",
@@ -34,6 +55,9 @@ Based on the following research results for the topic "{topic}", extract keyword
 
 Research Context:
 {context}
+
+Google Autocomplete Suggestions (real search queries users type):
+{suggestions_context}
 
 Extract and categorize keywords into:
 1. Primary keywords (5-7 most important, high-volume keywords)
@@ -70,13 +94,31 @@ Return the result as a JSON object with this structure:
             
             keywords_data = json.loads(json_str)
 
-            logger.info(f"Keyword intelligence completed: {len(keywords_data.get('primary_keywords', []))} primary keywords")
+            # Query autocomplete again using the extracted primary keywords as
+            # seeds — natural phrases return far more suggestions than the raw
+            # topic. Merge everything into long-tail keywords.
+            primary = keywords_data.get("primary_keywords", [])
+            keyword_seeds = [topic_seed] + [k for k in primary if k][:5]
+            keyword_suggestions = await google_suggestions_service.get_suggestions_for_queries(
+                keyword_seeds, max_results=8
+            )
+            all_suggestions = list(dict.fromkeys(google_suggestions + keyword_suggestions))
+
+            long_tail = list(keywords_data.get("long_tail_keywords", []))
+            existing = {k.lower() for k in long_tail}
+            for s in all_suggestions:
+                if s.lower() not in existing:
+                    long_tail.append(s)
+                    existing.add(s.lower())
+
+            logger.info(f"Keyword intelligence completed: {len(primary)} primary keywords, {len(all_suggestions)} google suggestions")
 
             return {
                 "agent": "keyword_intelligence",
-                "primary_keywords": keywords_data.get("primary_keywords", []),
+                "primary_keywords": primary,
                 "secondary_keywords": keywords_data.get("secondary_keywords", []),
-                "long_tail_keywords": keywords_data.get("long_tail_keywords", []),
+                "long_tail_keywords": long_tail,
+                "google_suggestions": all_suggestions,
             }
 
         except Exception as e:

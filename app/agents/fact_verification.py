@@ -1,6 +1,8 @@
 from typing import Dict, Any, List
 import json
 from app.services.openrouter import openrouter_service
+from app.services.content_fetcher import content_fetcher
+from app.services.fact_check import fact_check_service
 from app.utils.logger import logger, extract_json_from_llm_response
 
 
@@ -21,11 +23,70 @@ class FactVerificationAgent:
         try:
             logger.info("Starting fact verification")
 
-            # Build research context
-            research_context = "\n".join([
-                f"- {r.get('title', '')}: {r.get('snippet', '')}"
-                for r in research_results[:10]
-            ])
+            # Fetch full page content for the top research sources so claims
+            # are verified against article text, not just search snippets.
+            source_urls = [r.get("url") for r in research_results if r.get("url")][:3]
+            fetched_sources = await content_fetcher.fetch_urls(source_urls, max_chars=5000)
+
+            # Build research context: prefer fetched page text, fall back to snippets
+            fetched_by_url = {f["url"]: f for f in fetched_sources}
+            context_parts = []
+            for r in research_results[:10]:
+                url = r.get("url", "")
+                fetched = fetched_by_url.get(url)
+                if fetched:
+                    context_parts.append(
+                        f"- {fetched.get('title') or r.get('title', '')} ({url}):\n{fetched['text'][:2500]}"
+                    )
+                else:
+                    context_parts.append(
+                        f"- {r.get('title', '')} ({url}): {r.get('snippet', '')}"
+                    )
+            research_context = "\n".join(context_parts)
+
+            # Pass 1: extract key factual claims so they can be checked against
+            # the Google Fact Check Tools API before the full verification pass.
+            claims_prompt = f"""
+Extract up to 8 key factual claims from the following blog content that could be verified against external sources (statistics, studies, health effects, dates, named entities).
+
+Blog Content:
+{content[:6000]}
+
+Return ONLY a JSON object:
+{{"claims": ["claim 1", "claim 2", ...]}}
+"""
+            claims_response, _ = await openrouter_service.generate_text(
+                prompt=claims_prompt,
+                temperature=0.0,
+                multiplier=1,
+            )
+            extracted_claims = []
+            if claims_response:
+                try:
+                    claims_json = extract_json_from_llm_response(claims_response)
+                    extracted_claims = json.loads(claims_json).get("claims", [])[:8]
+                except Exception as e:
+                    logger.warning(f"Claim extraction failed: {e}")
+
+            # Query Google Fact Check Tools API for the extracted claims
+            fact_check_context = ""
+            if fact_check_service.enabled and extracted_claims:
+                fact_checks = await fact_check_service.search_claims_batch(
+                    extracted_claims[:5], max_results=2
+                )
+                if fact_checks:
+                    fact_check_context = "\n".join([
+                        f"- Claim: {f['claim']}\n  Rating: {f['rating']} | Source: {f['publisher']} ({f['url']})"
+                        for f in fact_checks
+                    ])
+                    logger.info(f"Fact Check API returned {len(fact_checks)} verified claims")
+
+            fact_check_section = ""
+            if fact_check_context:
+                fact_check_section = (
+                    "\nPublished Fact-Checks (Google Fact Check Tools API):\n"
+                    f"{fact_check_context}\n"
+                )
 
             # Calculate char limit first
             char_limit = openrouter_service._calculate_char_limit(
@@ -41,8 +102,8 @@ Blog Content:
 
 Research Sources:
 {research_context}
-
-Identify EVERY key factual claim in the content and check each one against the research sources.
+{fact_check_section}
+Identify EVERY key factual claim in the content and check each one against the research sources and published fact-checks.
 
 Return the result as a JSON object with this structure:
 {{
