@@ -107,7 +107,6 @@ class BlogGenerationWorkflow:
         workflow.add_node("blog_strategy_approval", self._blog_strategy_approval_node)
         workflow.add_node("final_approval", self._final_approval_node)
         workflow.add_node("regenerate_outline", self._regenerate_outline_node)
-        workflow.add_node("regenerate_blog", self._regenerate_blog_node)
         workflow.add_node("regenerate_seo", self._regenerate_seo_node)
         # workflow.add_node("regenerate_image", self._regenerate_image_node)
         workflow.add_node("regenerate_all", self._regenerate_all_node)
@@ -146,7 +145,6 @@ class BlogGenerationWorkflow:
             {
                 "approved": END,
                 "regenerate_outline": "regenerate_outline",
-                "regenerate_blog": "regenerate_blog",
                 "regenerate_seo": "regenerate_seo",
                 # "regenerate_image": "regenerate_image",
                 "regenerate_verification": "regenerate_verification",
@@ -158,7 +156,6 @@ class BlogGenerationWorkflow:
         # Regeneration loops: each re-runs only its own node, then returns to
         # the final approval checkpoint. State (outline, content, keywords,
         # research) is read from the checkpoint — nothing upstream re-runs.
-        workflow.add_edge("regenerate_blog", "final_approval")
         workflow.add_edge("regenerate_seo", "final_approval")
         # workflow.add_edge("regenerate_image", "final_approval")
         workflow.add_edge("regenerate_verification", "fact_verification")
@@ -311,9 +308,10 @@ class BlogGenerationWorkflow:
             return "approved"
         elif approval == "regenerate":
             regenerate_section = state.get("regenerate_section", "all")
-            # "blog_content" maps to the "regenerate_blog" node
-            if regenerate_section == "blog_content":
-                regenerate_section = "blog"
+            # Blog content feeds SEO, image, quality and fact verification —
+            # regenerating it requires regenerating everything downstream.
+            if regenerate_section in ("blog_content", "blog"):
+                regenerate_section = "all"
             return f"regenerate_{regenerate_section}"
         else:
             return "pending"
@@ -337,22 +335,6 @@ class BlogGenerationWorkflow:
         state["outline"] = result
         state["approval_status"] = "pending"
         state["approval_stage"] = "blog_strategy"
-        return state
-
-    async def _regenerate_blog_node(self, state: WorkflowState) -> WorkflowState:
-        """Regenerate blog content."""
-        logger.info("Regenerating blog content")
-        state["current_stage"] = "regenerate_blog"
-        result = await blog_writing_agent.execute(
-            topic=state["topic"],
-            outline=state["outline"].get("outline", []),
-            keywords=state["keywords"],
-            tone=state["tone"],
-            audience=state["audience"],
-        )
-        state["blog_content"] = result.get("content", "")
-        state["approval_status"] = "pending"
-        state["approval_stage"] = "final_review"
         return state
 
     async def _regenerate_seo_node(self, state: WorkflowState) -> WorkflowState:
