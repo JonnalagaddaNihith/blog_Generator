@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict
-from typing import Optional, Dict, Any, Literal
+from typing import Optional, Dict, Any
 from datetime import datetime
+from app.models.outline import OutlineStatus
 
 
 class OutlineBase(BaseModel):
@@ -19,7 +20,7 @@ class OutlineUpdate(BaseModel):
 
 class OutlineResponse(OutlineBase):
     id: int
-    status: Literal["draft", "approved", "rejected"]
+    status: OutlineStatus
     created_at: datetime
     updated_at: Optional[datetime] = None
 

@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict
-from typing import Optional, Literal
+from typing import Optional
 from datetime import datetime
+from app.models.blog import BlogStatus
 
 
 class BlogVersionBase(BaseModel):
@@ -20,7 +21,7 @@ class BlogVersionUpdate(BaseModel):
 
 class BlogVersionResponse(BlogVersionBase):
     id: int
-    status: Literal["draft", "approved", "rejected"]
+    status: BlogStatus
     created_at: datetime
     updated_at: Optional[datetime] = None
 

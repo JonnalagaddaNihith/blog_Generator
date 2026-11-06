@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict
 from typing import Optional, Literal
 from datetime import datetime
+from app.models.approval import ApprovalStage, ApprovalStatus
 
 
 class ApprovalBase(BaseModel):
@@ -21,6 +22,8 @@ class ApprovalUpdate(BaseModel):
 
 class ApprovalResponse(ApprovalBase):
     id: int
+    stage: ApprovalStage
+    status: ApprovalStatus
     approved_at: Optional[datetime] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
