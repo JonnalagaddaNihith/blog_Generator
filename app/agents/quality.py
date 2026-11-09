@@ -36,7 +36,7 @@ class QualityAgent:
 
             # Calculate char limit first
             char_limit = openrouter_service._calculate_char_limit(
-                f"Analyze the following blog content for quality:\n\nBlog Content:\n{content[:3000]}",
+                f"Analyze the following blog content for quality:\n\nBlog Content:\n{content}",
                 multiplier=3
             )
             
@@ -44,7 +44,7 @@ class QualityAgent:
 Analyze the following blog content for quality:
 
 Blog Content:
-{content[:3000]}
+{content}
 
 Evaluate:
 1. Grammar and spelling (score 0-100)

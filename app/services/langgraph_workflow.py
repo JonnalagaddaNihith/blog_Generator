@@ -241,6 +241,7 @@ class BlogGenerationWorkflow:
             keywords=state["keywords"],
             tone=state["tone"],
             audience=state["audience"],
+            target_word_count=state["target_word_count"],
         )
         state["blog_content"] = result.get("content", "")
         state["current_stage"] = "blog_writing"
@@ -383,6 +384,7 @@ class BlogGenerationWorkflow:
             keywords=state["keywords"],
             tone=state["tone"],
             audience=state["audience"],
+            target_word_count=state["target_word_count"],
         )
         state["blog_content"] = result.get("content", "")
         # Regenerate SEO

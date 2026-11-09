@@ -15,6 +15,7 @@ class BlogWritingAgent:
         keywords: Dict[str, List[str]],
         tone: str,
         audience: str,
+        target_word_count: int,
     ) -> Dict[str, Any]:
         """
         Write the complete blog content based on outline.
@@ -34,7 +35,7 @@ class BlogWritingAgent:
 
             # Calculate char limit first
             char_limit = openrouter_service._calculate_char_limit(
-                f"Write a complete blog post based on the following outline:\n\nTopic: {topic}\nTone: {tone}\nTarget Audience: {audience}\n\nPrimary Keywords to include: {', '.join(primary_keywords)}\nSecondary Keywords to include: {', '.join(secondary_keywords[:10])}\n\nOutline:\n{outline_text}",
+                f"Write a complete blog post based on the following outline:\n\nTopic: {topic}\nTone: {tone}\nTarget Audience: {audience}\nTotal Target Word Count: {target_word_count}\n\nPrimary Keywords to include: {', '.join(primary_keywords)}\nSecondary Keywords to include: {', '.join(secondary_keywords[:10])}\n\nOutline:\n{outline_text}",
                 multiplier=8
             )
             
@@ -44,6 +45,7 @@ Write a complete blog post based on the following outline:
 Topic: {topic}
 Tone: {tone}
 Target Audience: {audience}
+Total Target Word Count: {target_word_count} words
 
 Primary Keywords to include: {", ".join(primary_keywords)}
 Secondary Keywords to include: {", ".join(secondary_keywords[:10])}
@@ -52,6 +54,8 @@ Outline:
 {outline_text}
 
 Requirements:
+- Aim for approximately {target_word_count} words in the complete article body, excluding Markdown formatting symbols
+- Follow the outline section word counts so their total matches the target word count
 - Write engaging, high-quality content for each section
 - Naturally incorporate the keywords
 - Match the specified tone and audience

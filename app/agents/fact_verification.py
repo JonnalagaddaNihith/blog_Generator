@@ -1,9 +1,60 @@
 from typing import Dict, Any, List
 import json
+import re
+from urllib.parse import urlparse
 from app.services.openrouter import openrouter_service
 from app.services.content_fetcher import content_fetcher
 from app.services.fact_check import fact_check_service
 from app.utils.logger import logger, extract_json_from_llm_response
+
+
+def _extract_url(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    value = value.strip()
+    match = re.search(r"https?://\S+", value)
+    if not match:
+        return ""
+    return re.sub(r"[.,;:!?)\]}>\"']+$", "", match.group(0))
+
+
+def _candidate_labels(candidate: Dict[str, Any]) -> List[str]:
+    url = candidate.get("url", "")
+    labels = [candidate.get("title", ""), candidate.get("publisher", "")]
+    domain = urlparse(url).netloc.lower().removeprefix("www.")
+    if domain:
+        labels.append(domain)
+    return [label for label in labels if label]
+
+
+def _resolve_claim_source_url(claim: Dict[str, Any], candidates: List[Dict[str, Any]]) -> str:
+    for field in ("source_url", "url", "source", "publisher"):
+        url = _extract_url(claim.get(field))
+        if url:
+            return url
+
+    hint = " ".join(
+        str(claim.get(field, ""))
+        for field in ("source", "publisher", "source_name", "source_title")
+    ).lower()
+    if not hint.strip():
+        return ""
+
+    for candidate in candidates:
+        for label in _candidate_labels(candidate):
+            if label.lower() in hint:
+                return candidate.get("url", "")
+    return ""
+
+
+def _normalize_claims(claims: List[Any], candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    normalized = []
+    for claim in claims:
+        if not isinstance(claim, dict):
+            claim = {"claim": str(claim), "supported": False}
+        claim["source_url"] = _resolve_claim_source_url(claim, candidates)
+        normalized.append(claim)
+    return normalized
 
 
 class FactVerificationAgent:
@@ -70,6 +121,7 @@ Return ONLY a JSON object:
 
             # Query Google Fact Check Tools API for the extracted claims
             fact_check_context = ""
+            fact_checks = []
             if fact_check_service.enabled and extracted_claims:
                 fact_checks = await fact_check_service.search_claims_batch(
                     extracted_claims[:5], max_results=2
@@ -87,6 +139,16 @@ Return ONLY a JSON object:
                     "\nPublished Fact-Checks (Google Fact Check Tools API):\n"
                     f"{fact_check_context}\n"
                 )
+
+            source_candidates = [
+                {"url": r.get("url", ""), "title": r.get("title", ""), "publisher": ""}
+                for r in research_results
+                if r.get("url")
+            ] + [
+                {"url": f.get("url", ""), "title": f.get("claim", ""), "publisher": f.get("publisher", "")}
+                for f in fact_checks
+                if f.get("url")
+            ]
 
             # Calculate char limit first
             char_limit = openrouter_service._calculate_char_limit(
@@ -108,8 +170,8 @@ Identify EVERY key factual claim in the content and check each one against the r
 Return the result as a JSON object with this structure:
 {{
     "claims": [
-        {{"claim": "...", "supported": true, "source": "..."}},
-        {{"claim": "...", "supported": false, "source": "none found", "issue": "..."}}
+        {{"claim": "...", "supported": true, "source": "...", "source_url": "https://..."}},
+        {{"claim": "...", "supported": false, "source": "none found", "source_url": "", "issue": "..."}}
     ],
     "confidence_score": 85,
     "recommendations": ["..."]
@@ -118,6 +180,8 @@ Return the result as a JSON object with this structure:
 Rules:
 - List every factual claim you check, including unsupported/questionable ones (supported: false).
 - Do not omit claims; the counts are computed from this list.
+- source_url must be copied exactly from a URL in Research Sources or Published Fact-Checks.
+- Do not invent source URLs; use an empty string when no source URL is available.
 - Character limit: approximately {char_limit} characters. Be thorough but concise.
 """
 
@@ -143,6 +207,7 @@ Rules:
 
             # Normalize claims list (accept legacy "sources" key too)
             claims = verification_data.get("claims") or verification_data.get("sources", [])
+            claims = _normalize_claims(claims, source_candidates)
             claims_verified = sum(1 for c in claims if c.get("supported"))
             total_claims = len(claims)
 

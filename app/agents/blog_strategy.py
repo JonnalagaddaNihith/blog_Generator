@@ -53,6 +53,8 @@ Create:
 1. A differentiated strategy that addresses gaps and opportunities
 2. A structured outline with headings, subheadings, and brief descriptions for each section
 
+The word_count values across all outline sections must add up to the target word count of {target_word_count}. Allocate words across sections based on their importance and scope.
+
 Character limit: approximately {char_limit} characters. Be detailed but efficient.
 
 Return the result as a JSON object with this structure:

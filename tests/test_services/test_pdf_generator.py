@@ -29,3 +29,36 @@ async def test_pdf_generation():
         # Clean up
         if os.path.exists(output_path):
             os.remove(output_path)
+
+
+def test_inline_markdown_formats_basic_syntax():
+    result = pdf_generator._inline_markdown(
+        "A **bold** and `code` [link](https://example.com)."
+    )
+
+    assert result == (
+        "A <b>bold</b> and "
+        "<font name=\"Courier\" size=\"9\">code</font> "
+        "<a href=\"https://example.com\" color=\"#1a0dab\"><u>link</u></a>."
+    )
+
+
+def test_add_content_renders_markdown_blocks():
+    story = []
+    pdf_generator._add_content(
+        story,
+        "## Main Heading\n\n"
+        "Intro with **bold** and [source](https://example.com).\n\n"
+        "* First item\n"
+        "* Second item\n\n"
+        "1. First step\n"
+        "2. Second step",
+    )
+
+    texts = [getattr(item, "text", "") for item in story]
+
+    assert "Main Heading" in texts
+    assert any("<b>bold</b>" in text and "<a href=" in text for text in texts)
+    assert any(text.startswith("• First item") for text in texts)
+    assert any(text.startswith("1. First step") for text in texts)
+    assert not any("##" in text or "**" in text or "[source](" in text for text in texts)
