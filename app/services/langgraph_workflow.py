@@ -1,4 +1,4 @@
-from typing import Dict, Any, TypedDict, Annotated, Sequence, Literal
+from typing import Dict, Any, TypedDict, Sequence, Literal
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -99,7 +99,7 @@ class BlogGenerationWorkflow:
         workflow.add_node("blog_strategy", self._blog_strategy_node)
         workflow.add_node("blog_writing", self._blog_writing_node)
         workflow.add_node("seo", self._seo_node)
-        # workflow.add_node("image", self._image_node)
+        # workflow.add_node("image", self._image_node) # uncomment when api is available
         workflow.add_node("quality", self._quality_node)
         workflow.add_node("fact_verification", self._fact_verification_node)
 
@@ -108,7 +108,7 @@ class BlogGenerationWorkflow:
         workflow.add_node("final_approval", self._final_approval_node)
         workflow.add_node("regenerate_outline", self._regenerate_outline_node)
         workflow.add_node("regenerate_seo", self._regenerate_seo_node)
-        # workflow.add_node("regenerate_image", self._regenerate_image_node)
+        # workflow.add_node("regenerate_image", self._regenerate_image_node) # uncomment when api is available
         workflow.add_node("regenerate_all", self._regenerate_all_node)
         workflow.add_node("regenerate_verification", self._regenerate_verification_node)
 
@@ -133,7 +133,6 @@ class BlogGenerationWorkflow:
         # Stage 2: Writing to Final Verification
         workflow.add_edge("blog_writing", "seo")
         # workflow.add_edge("seo", "image")
-        # workflow.add_edge("image", "quality")
         workflow.add_edge("seo", "quality")
         workflow.add_edge("quality", "fact_verification")
 
@@ -257,6 +256,18 @@ class BlogGenerationWorkflow:
         )
         state["seo_metadata"] = result
         state["current_stage"] = "seo"
+        return state
+
+    async def _image_node(self, state: WorkflowState) -> WorkflowState:
+        """Execute image agent."""
+        logger.info("Executing image node")
+        result = await image_agent.execute(
+            topic=state["topic"],
+            content=state["blog_content"],
+            tone=state["tone"],
+        )
+        state["image_details"] = result
+        state["current_stage"] = "image"
         return state
 
     async def _quality_node(self, state: WorkflowState) -> WorkflowState:
