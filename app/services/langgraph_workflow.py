@@ -56,6 +56,8 @@ class WorkflowState(TypedDict):
     approval_status: Literal["pending", "approved", "rejected", "regenerate"]
     approval_stage: Literal["blog_strategy", "final_review", None]
     regenerate_section: Literal["outline", "blog_content", "seo", "image", "verification", "all", None]
+    # When True, LLM calls skip the Redis response cache (set by regenerate nodes)
+    bypass_llm_cache: bool
     # ID of the persisted BlogVersion row (set when workflow completes)
     blog_version_id: int
 
@@ -84,6 +86,21 @@ class BlogGenerationWorkflow:
                 logger.error(f"Failed to initialize checkpointer: {e}")
                 raise
         return self.checkpointer
+
+    async def _reset_graph(self):
+        """Drop the cached graph/checkpointer so fresh DB connections are opened.
+
+        Needed when postgres/redis restart underneath the app: the checkpointer
+        holds pooled connections that don't recover on their own.
+        """
+        if self._checkpointer_cm is not None:
+            try:
+                await self._checkpointer_cm.__aexit__(None, None, None)
+            except Exception as e:
+                logger.warning(f"Error closing checkpointer context: {e}")
+        self._checkpointer_cm = None
+        self.checkpointer = None
+        self.graph = None
 
     async def build_graph(self):
         """Build the LangGraph workflow graph."""
@@ -181,6 +198,17 @@ class BlogGenerationWorkflow:
         logger.info("LangGraph workflow built successfully")
         return self.graph
 
+    async def _aget_state_with_retry(self, config: Dict[str, Any]):
+        """Read graph state, rebuilding graph+checkpointer once on stale-connection errors."""
+        graph = await self.build_graph()
+        try:
+            return await graph.aget_state(config)
+        except Exception as e:
+            logger.warning(f"aget_state failed ({e}); rebuilding graph/checkpointer")
+            await self._reset_graph()
+            graph = await self.build_graph()
+            return await graph.aget_state(config)
+
     async def _web_research_node(self, state: WorkflowState) -> WorkflowState:
         """Execute web research agent."""
         logger.info("Executing web research node")
@@ -224,6 +252,7 @@ class BlogGenerationWorkflow:
             tone=state["tone"],
             keywords=state["keywords"],
             competitor_analysis=state["competitor_analysis"],
+            use_cache=not state.get("bypass_llm_cache", False),
         )
         state["outline"] = result
         state["current_stage"] = "blog_strategy"
@@ -241,6 +270,7 @@ class BlogGenerationWorkflow:
             tone=state["tone"],
             audience=state["audience"],
             target_word_count=state["target_word_count"],
+            use_cache=not state.get("bypass_llm_cache", False),
         )
         state["blog_content"] = result.get("content", "")
         state["current_stage"] = "blog_writing"
@@ -253,6 +283,7 @@ class BlogGenerationWorkflow:
             topic=state["topic"],
             content=state["blog_content"],
             keywords=state["keywords"],
+            use_cache=not state.get("bypass_llm_cache", False),
         )
         state["seo_metadata"] = result
         state["current_stage"] = "seo"
@@ -260,11 +291,17 @@ class BlogGenerationWorkflow:
 
     async def _image_node(self, state: WorkflowState) -> WorkflowState:
         """Execute image agent."""
+        if not settings.enable_image_generation:
+            logger.info("Image generation is disabled, skipping")
+            state["current_stage"] = "image"
+            state["image_details"] = {}
+            return state
         logger.info("Executing image node")
         result = await image_agent.execute(
             topic=state["topic"],
             content=state["blog_content"],
             tone=state["tone"],
+            use_cache=not state.get("bypass_llm_cache", False),
         )
         state["image_details"] = result
         state["current_stage"] = "image"
@@ -273,7 +310,10 @@ class BlogGenerationWorkflow:
     async def _quality_node(self, state: WorkflowState) -> WorkflowState:
         """Execute quality agent."""
         logger.info("Executing quality node")
-        result = await quality_agent.execute(content=state["blog_content"])
+        result = await quality_agent.execute(
+            content=state["blog_content"],
+            use_cache=not state.get("bypass_llm_cache", False),
+        )
         state["quality_report"] = result
         state["current_stage"] = "quality"
         return state
@@ -284,6 +324,7 @@ class BlogGenerationWorkflow:
         result = await fact_verification_agent.execute(
             content=state["blog_content"],
             research_results=list(state["research_results"]),
+            use_cache=not state.get("bypass_llm_cache", False),
         )
         state["fact_verification_report"] = result
         state["current_stage"] = "fact_verification"
@@ -332,6 +373,9 @@ class BlogGenerationWorkflow:
         """Regenerate the outline via the blog strategy agent."""
         logger.info("Regenerating outline")
         state["current_stage"] = "regenerate_outline"
+        # User asked for fresh content — bypass the LLM response cache so a
+        # repeated regeneration doesn't return the cached outline.
+        state["bypass_llm_cache"] = True
         # Reaching this node means the user asked for a new outline, so always
         # regenerate via the agent regardless of regenerate_section. The
         # approval is reset to the first gate: the user can then edit the
@@ -343,6 +387,7 @@ class BlogGenerationWorkflow:
             tone=state["tone"],
             keywords=state["keywords"],
             competitor_analysis=state["competitor_analysis"],
+            use_cache=False,
         )
         state["outline"] = result
         state["approval_status"] = "pending"
@@ -353,10 +398,12 @@ class BlogGenerationWorkflow:
         """Regenerate SEO metadata."""
         logger.info("Regenerating SEO metadata")
         state["current_stage"] = "regenerate_seo"
+        state["bypass_llm_cache"] = True
         result = await seo_agent.execute(
             topic=state["topic"],
             content=state["blog_content"],
             keywords=state["keywords"],
+            use_cache=False,
         )
         state["seo_metadata"] = result
         state["approval_status"] = "pending"
@@ -365,12 +412,21 @@ class BlogGenerationWorkflow:
 
     async def _regenerate_image_node(self, state: WorkflowState) -> WorkflowState:
         """Regenerate image."""
+        if not settings.enable_image_generation:
+            logger.info("Image generation is disabled, skipping")
+            state["current_stage"] = "regenerate_image"
+            state["image_details"] = {}
+            state["approval_status"] = "pending"
+            state["approval_stage"] = "final_review"
+            return state
         logger.info("Regenerating image")
         state["current_stage"] = "regenerate_image"
+        state["bypass_llm_cache"] = True
         result = await image_agent.execute(
             topic=state["topic"],
             content=state["blog_content"],
             tone=state["tone"],
+            use_cache=False,
         )
         state["image_details"] = result
         state["approval_status"] = "pending"
@@ -381,6 +437,8 @@ class BlogGenerationWorkflow:
         """Re-run fact verification only, keeping all other outputs."""
         logger.info("Regenerating fact verification")
         state["current_stage"] = "regenerate_verification"
+        # The fact_verification node reads this flag to skip the LLM cache.
+        state["bypass_llm_cache"] = True
         state["fact_verification_report"] = {}
         return state
 
@@ -388,6 +446,7 @@ class BlogGenerationWorkflow:
         """Regenerate entire blog from outline onwards."""
         logger.info("Regenerating entire blog")
         state["current_stage"] = "regenerate_all"
+        state["bypass_llm_cache"] = True
         # Regenerate blog content
         result = await blog_writing_agent.execute(
             topic=state["topic"],
@@ -396,6 +455,7 @@ class BlogGenerationWorkflow:
             tone=state["tone"],
             audience=state["audience"],
             target_word_count=state["target_word_count"],
+            use_cache=False,
         )
         state["blog_content"] = result.get("content", "")
         # Regenerate SEO
@@ -403,15 +463,25 @@ class BlogGenerationWorkflow:
             topic=state["topic"],
             content=state["blog_content"],
             keywords=state["keywords"],
+            use_cache=False,
         )
         state["seo_metadata"] = seo_result
-        # Regenerate image
-        image_result = await image_agent.execute(
-            topic=state["topic"],
-            content=state["blog_content"],
-            tone=state["tone"],
-        )
-        state["image_details"] = image_result
+        # Regenerate image only if enabled
+        if settings.enable_image_generation:
+            try:
+                image_result = await image_agent.execute(
+                    topic=state["topic"],
+                    content=state["blog_content"],
+                    tone=state["tone"],
+                    use_cache=False,
+                )
+                state["image_details"] = image_result
+            except Exception as e:
+                logger.warning(f"Image generation failed, continuing without image: {e}")
+                state["image_details"] = {}
+        else:
+            logger.info("Image generation is disabled, skipping")
+            state["image_details"] = {}
         return state
 
     async def start_workflow(
@@ -451,6 +521,7 @@ class BlogGenerationWorkflow:
             "approval_status": "pending",
             "approval_stage": None,
             "regenerate_section": None,
+            "bypass_llm_cache": False,
             "blog_version_id": 0,
         }
 
@@ -472,6 +543,25 @@ class BlogGenerationWorkflow:
         return thread_id
 
     async def resume_workflow(
+        self,
+        project_id: int,
+        action: str = "approve",
+        updated_outline: Dict[str, Any] = None,
+        regenerate_section: str = None,
+    ) -> Dict[str, Any]:
+        """
+        Resume the workflow after approval/rejection.
+
+        Retries once after rebuilding the graph/checkpointer — covers stale
+        DB connections left behind by a postgres restart.
+        """
+        try:
+            return await self._resume_workflow(project_id, action, updated_outline, regenerate_section)
+        except Exception:
+            await self._reset_graph()
+            return await self._resume_workflow(project_id, action, updated_outline, regenerate_section)
+
+    async def _resume_workflow(
         self,
         project_id: int,
         action: str = "approve",
@@ -701,11 +791,10 @@ class BlogGenerationWorkflow:
         """
         Get the current status of the workflow.
         """
-        graph = await self.build_graph()
         thread_id = str(project_id)
         config = {"configurable": {"thread_id": thread_id}}
 
-        state = await graph.aget_state(config)
+        state = await self._aget_state_with_retry(config)
         current_stage = state.values.get("current_stage", "unknown") if state.values else "not_started"
         # While interrupted before an approval node, current_stage still shows
         # the last executed node — report the gate the workflow is paused at.

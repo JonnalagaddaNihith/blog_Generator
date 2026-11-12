@@ -37,6 +37,7 @@ class SEOAgent:
         topic: str,
         content: str,
         keywords: Dict[str, List[str]],
+        use_cache: bool = True,
     ) -> Dict[str, Any]:
         """
         Optimize blog content for SEO.
@@ -82,6 +83,7 @@ Return the result as a JSON object with this structure:
                 prompt=prompt,
                 temperature=0.5,
                 multiplier=3,
+                use_cache=use_cache,
             )
 
             if response is None:

@@ -64,6 +64,7 @@ class OpenRouterService:
         temperature: float = 0.7,
         model: Optional[str] = None,
         multiplier: int = 3,
+        use_cache: bool = True,
     ) -> tuple[str, int]:
         """
         Generate text using OpenRouter API.
@@ -72,12 +73,13 @@ class OpenRouterService:
         # Calculate dynamic max_tokens and char limit
         dynamic_max = self._calculate_max_tokens(prompt, max_tokens, multiplier)
         char_limit = self._calculate_char_limit(prompt, multiplier)
-        
+
         cache_key = f"text:{model or self.text_model}:{hash(prompt)}:{dynamic_max}:{temperature}"
-        cached = await cache_get(cache_key)
-        if cached:
-            logger.info(f"Cache hit for text generation")
-            return cached, char_limit
+        if use_cache:
+            cached = await cache_get(cache_key)
+            if cached:
+                logger.info(f"Cache hit for text generation")
+                return cached, char_limit
 
         try:
             payload = {
@@ -147,12 +149,14 @@ class OpenRouterService:
                             logger.info(f"Extracted from data.output, length: {len(extracted_content)}")
                     
                     if extracted_content:
-                        await cache_set(cache_key, extracted_content, expire_seconds=3600)
+                        if use_cache:
+                            await cache_set(cache_key, extracted_content, expire_seconds=3600)
                         return extracted_content, char_limit
                     
                     raise ValueError("Content is None in OpenRouter response and no fallback content found")
 
-                await cache_set(cache_key, content, expire_seconds=3600)
+                if use_cache:
+                    await cache_set(cache_key, content, expire_seconds=3600)
                 logger.info(f"Successfully generated text using model: {model or self.text_model}")
                 return content, char_limit
 
@@ -168,16 +172,18 @@ class OpenRouterService:
         prompt: str,
         size: str = "1024x1024",
         model: Optional[str] = None,
+        use_cache: bool = True,
     ) -> Dict[str, Any]:
         """
         Generate image using OpenRouter API.
         Returns dictionary with image_url, model_used, etc.
         """
         cache_key = f"image:{model or self.image_model}:{hash(prompt)}:{size}"
-        cached = await cache_get(cache_key)
-        if cached:
-            logger.info(f"Cache hit for image generation")
-            return cached
+        if use_cache:
+            cached = await cache_get(cache_key)
+            if cached:
+                logger.info(f"Cache hit for image generation")
+                return cached
 
         try:
             payload = {
@@ -202,7 +208,8 @@ class OpenRouterService:
                     "size": size,
                 }
 
-                await cache_set(cache_key, result, expire_seconds=86400)
+                if use_cache:
+                    await cache_set(cache_key, result, expire_seconds=86400)
                 logger.info(f"Successfully generated image using model: {model or self.image_model}")
                 return result
 

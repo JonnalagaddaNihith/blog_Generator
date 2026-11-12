@@ -1,19 +1,24 @@
 "use client";
 
+import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { WorkflowStatusResponse } from "@/lib/types";
+import { exportPdf, updateWorkflowBlogContent } from "@/lib/api";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, AlertTriangle, RefreshCw, Download } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { CheckCircle2, AlertTriangle, RefreshCw, Download, Loader2, Edit, Save, X } from "lucide-react";
 
 interface Props {
   status: WorkflowStatusResponse;
   submitting: boolean;
   onApproveFinal: () => void;
   onRegenerateSection: (section: "outline" | "seo" | "verification" | "all") => void;
+  onRefresh?: () => void;
+  projectId: number;
 }
 
 export function FinalReviewTabs({
@@ -21,8 +26,53 @@ export function FinalReviewTabs({
   submitting,
   onApproveFinal,
   onRegenerateSection,
+  onRefresh,
+  projectId,
 }: Props) {
-  const { seo_metadata, quality_report, fact_verification_report, blog_content, is_complete } = status;
+  const { seo_metadata, quality_report, fact_verification_report, blog_content, is_complete, blog_version_id } = status;
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState(false);
+  const [editedContent, setEditedContent] = useState(blog_content);
+  const [savingContent, setSavingContent] = useState(false);
+
+  const handleExportPdf = async () => {
+    setExportingPdf(true);
+    try {
+      const result = await exportPdf(blog_version_id);
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+      setPdfDownloadUrl(new URL(result.download_url, apiBase).toString());
+    } catch (err) {
+      console.error("Failed to export PDF:", err);
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
+  const handleSaveContent = async () => {
+    setSavingContent(true);
+    try {
+      await updateWorkflowBlogContent(projectId, editedContent);
+      setEditingContent(false);
+      if (onRefresh) {
+        await onRefresh();
+      }
+    } catch (err) {
+      console.error("Failed to save blog content:", err);
+    } finally {
+      setSavingContent(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditedContent(blog_content);
+    setEditingContent(false);
+  };
+
+  const handleStartEdit = () => {
+    setEditedContent(blog_content);
+    setEditingContent(true);
+  };
 
   return (
     <div className="space-y-4">
@@ -55,15 +105,25 @@ export function FinalReviewTabs({
         </div>
 
         {is_complete ? (
-          <Button asChild>
-            <a
-              href={`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"}/blogs/${status.blog_version_id}/pdf`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <Download className="mr-2 h-4 w-4" /> Export PDF
-            </a>
-          </Button>
+          pdfDownloadUrl ? (
+            <Button asChild>
+              <a href={pdfDownloadUrl} target="_blank" rel="noreferrer">
+                <Download className="mr-2 h-4 w-4" /> Download PDF
+              </a>
+            </Button>
+          ) : (
+            <Button disabled={exportingPdf} onClick={handleExportPdf}>
+              {exportingPdf ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating...
+                </>
+              ) : (
+                <>
+                  <Download className="mr-2 h-4 w-4" /> Export PDF
+                </>
+              )}
+            </Button>
+          )
         ) : (
           <Button disabled={submitting} onClick={onApproveFinal}>
             <CheckCircle2 className="mr-2 h-4 w-4" /> Approve & Finalize
@@ -83,8 +143,48 @@ export function FinalReviewTabs({
 
         <TabsContent value="article">
           <Card>
-            <CardContent className="prose prose-neutral dark:prose-invert max-w-none pt-6">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{blog_content}</ReactMarkdown>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Article Draft</CardTitle>
+                {!is_complete && !editingContent && (
+                  <Button variant="outline" size="sm" onClick={handleStartEdit}>
+                    <Edit className="mr-2 h-4 w-4" /> Edit Content
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6">
+              {editingContent ? (
+                <div className="space-y-4">
+                  <Textarea
+                    value={editedContent}
+                    onChange={(e) => setEditedContent(e.target.value)}
+                    rows={20}
+                    className="font-mono text-sm"
+                    placeholder="Edit the blog content here..."
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={handleCancelEdit} disabled={savingContent}>
+                      <X className="mr-2 h-4 w-4" /> Cancel
+                    </Button>
+                    <Button onClick={handleSaveContent} disabled={savingContent}>
+                      {savingContent ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="mr-2 h-4 w-4" /> Save Changes
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="prose prose-neutral dark:prose-invert max-w-none">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{blog_content}</ReactMarkdown>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

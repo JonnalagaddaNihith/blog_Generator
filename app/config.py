@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     app_host: str
     app_port: int
 
+    # Feature Flags
+    enable_image_generation: bool = False
+
     class Config:
         env_file = ".env"
         case_sensitive = False

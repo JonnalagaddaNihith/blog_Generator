@@ -26,7 +26,7 @@ class QualityAgent:
     Quality Agent - Validate grammar, readability, and structure.
     """
 
-    async def execute(self, content: str) -> Dict[str, Any]:
+    async def execute(self, content: str, use_cache: bool = True) -> Dict[str, Any]:
         """
         Validate blog content quality.
         Returns quality scores and issues.
@@ -70,6 +70,7 @@ Return the result as a JSON object with this structure:
                 prompt=prompt,
                 temperature=0.3,
                 multiplier=3,
+                use_cache=use_cache,
             )
 
             if response is None:

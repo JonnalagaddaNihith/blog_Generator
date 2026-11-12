@@ -16,6 +16,7 @@ class BlogWritingAgent:
         tone: str,
         audience: str,
         target_word_count: int,
+        use_cache: bool = True,
     ) -> Dict[str, Any]:
         """
         Write the complete blog content based on outline.
@@ -71,6 +72,7 @@ Write the complete blog post:
                 max_tokens=1000000,  # Blog writing needs maximum tokens for full content
                 temperature=0.7,
                 multiplier=8,
+                use_cache=use_cache,
             )
 
             if content is None:

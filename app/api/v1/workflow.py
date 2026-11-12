@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -68,6 +68,14 @@ async def approve_workflow(
         raise HTTPException(status_code=404, detail="Project not found")
 
     try:
+        # Check if workflow has been started by checking status first
+        status = await blog_generation_workflow.get_workflow_status(project_id=project_id)
+        if status.get("current_stage") == "not_started" or status.get("current_stage") == "unknown":
+            raise HTTPException(
+                status_code=400,
+                detail="Workflow has not been started for this project. Please start the workflow first."
+            )
+        
         final_state = await blog_generation_workflow.resume_workflow(
             project_id=project_id,
             action=request.action,
@@ -80,9 +88,48 @@ async def approve_workflow(
             "project_id": project_id,
             "current_stage": final_state.get("current_stage"),
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error approving workflow: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to approve workflow: {str(e)}")
+
+
+@router.put("/projects/{project_id}/workflow/blog_content")
+async def update_workflow_blog_content(
+    project_id: int,
+    blog_content: str = Body(...),
+    db: AsyncSession = Depends(get_current_db),
+):
+    """Update the blog content in the workflow state (for manual editing)."""
+    # Verify project exists
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        # Get current workflow state
+        status = await blog_generation_workflow.get_workflow_status(project_id=project_id)
+        
+        # Update blog_content in state
+        graph = await blog_generation_workflow.build_graph()
+        thread_id = str(project_id)
+        config = {"configurable": {"thread_id": thread_id}}
+        current_state = await graph.aget_state(config)
+        
+        if current_state.values:
+            current_state.values["blog_content"] = blog_content
+            # Save the updated state
+            await graph.aupdate_state(config, current_state.values)
+        
+        return {
+            "message": "Blog content updated successfully",
+            "project_id": project_id,
+        }
+    except Exception as e:
+        logger.error(f"Error updating blog content: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update blog content: {str(e)}")
 
 
 @router.put("/projects/{project_id}/workflow/outline")

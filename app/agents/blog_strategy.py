@@ -17,6 +17,7 @@ class BlogStrategyAgent:
         tone: str,
         keywords: Dict[str, List[str]],
         competitor_analysis: Dict[str, Any],
+        use_cache: bool = True,
     ) -> Dict[str, Any]:
         """
         Generate blog strategy and structured outline.
@@ -72,6 +73,7 @@ Return the result as a JSON object with this structure:
                 prompt=prompt,
                 temperature=0.7,
                 multiplier=4,
+                use_cache=use_cache,
             )
 
             if response is None:

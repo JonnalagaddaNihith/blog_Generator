@@ -66,6 +66,7 @@ class FactVerificationAgent:
         self,
         content: str,
         research_results: List[Dict[str, Any]],
+        use_cache: bool = True,
     ) -> Dict[str, Any]:
         """
         Verify factual claims in the blog content against research sources.
@@ -110,6 +111,7 @@ Return ONLY a JSON object:
                 prompt=claims_prompt,
                 temperature=0.0,
                 multiplier=1,
+                use_cache=use_cache,
             )
             extracted_claims = []
             if claims_response:
@@ -189,6 +191,7 @@ Rules:
                 prompt=prompt,
                 temperature=0.3,
                 multiplier=3,
+                use_cache=use_cache,
             )
 
             if response is None:

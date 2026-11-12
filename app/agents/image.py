@@ -14,6 +14,7 @@ class ImageAgent:
         topic: str,
         content: str,
         tone: str,
+        use_cache: bool = True,
     ) -> Dict[str, Any]:
         """
         Generate a featured image for the blog.
@@ -33,6 +34,7 @@ The image should be visually appealing, relevant to the topic, and suitable for 
             image_result = await openrouter_service.generate_image(
                 prompt=prompt,
                 size="1024x1024",
+                use_cache=use_cache,
             )
 
             # Download the image
