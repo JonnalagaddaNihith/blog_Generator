@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Company, Project, WorkflowStatusResponse, ProjectUpdate } from "@/lib/types";
 import { getCompany, updateCompany, deleteCompany, getProjects, getWorkflowStatus, updateProject, deleteProject } from "@/lib/api";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,8 @@ function CompanyDetailContent({ companyId }: { companyId: number }) {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
   const [savingProject, setSavingProject] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ kind: "project" | "company"; id: number; label: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -149,21 +152,40 @@ function CompanyDetailContent({ companyId }: { companyId: number }) {
     }
   };
 
-  const handleDeleteProject = async (projectId: number) => {
-    if (!confirm("Are you sure you want to delete this project? This cannot be undone.")) {
-      return;
+  const handleDeleteProject = (projectId: number) => {
+    const project = projects.find((p) => p.id === projectId);
+    if (project) {
+      setDeleteTarget({ kind: "project", id: projectId, label: project.topic });
     }
+  };
 
+  const handleDelete = () => {
+    if (company) {
+      setDeleteTarget({ kind: "company", id: companyId, label: company.name });
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+
+    setDeleting(true);
     try {
-      await deleteProject(projectId);
-      setProjects((prev) => prev.filter((p) => p.id !== projectId));
-      setWorkflowStatuses((prev) => {
-        const newStatuses = { ...prev };
-        delete newStatuses[projectId];
-        return newStatuses;
-      });
+      if (deleteTarget.kind === "project") {
+        await deleteProject(deleteTarget.id);
+        setProjects((prev) => prev.filter((p) => p.id !== deleteTarget.id));
+        setWorkflowStatuses((prev) => {
+          const newStatuses = { ...prev };
+          delete newStatuses[deleteTarget.id];
+          return newStatuses;
+        });
+        setDeleteTarget(null);
+      } else {
+        await deleteCompany(deleteTarget.id);
+        router.push("/companies");
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete project");
+      setError(err instanceof Error ? err.message : "Failed to delete");
+      setDeleting(false);
     }
   };
 
@@ -185,19 +207,6 @@ function CompanyDetailContent({ companyId }: { companyId: number }) {
       setError(err instanceof Error ? err.message : "Failed to update company");
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this company? This will also delete all associated projects.")) {
-      return;
-    }
-
-    try {
-      await deleteCompany(companyId);
-      router.push("/companies");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete company");
     }
   };
 
@@ -381,6 +390,9 @@ function CompanyDetailContent({ companyId }: { companyId: number }) {
             <div className="space-y-2">
               {projects.map((project) => {
                 const { label, variant } = getProjectStatusBadge(project.id);
+                const wfStatus = workflowStatuses[project.id];
+                const isCompleted =
+                  wfStatus?.is_complete === true && wfStatus?.approval_status === "approved";
                 return (
                   <div
                     key={project.id}
@@ -400,6 +412,8 @@ function CompanyDetailContent({ companyId }: { companyId: number }) {
                       <Button
                         variant="ghost"
                         size="icon"
+                        disabled={isCompleted}
+                        title={isCompleted ? "Completed projects cannot be edited" : "Edit project"}
                         onClick={() => handleEditProject(project)}
                       >
                         <Edit className="h-4 w-4" />
@@ -487,6 +501,21 @@ function CompanyDetailContent({ companyId }: { companyId: number }) {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setDeleteTarget(null);
+        }}
+        title={deleteTarget?.kind === "company" ? "Delete Company" : "Delete Project"}
+        description={
+          deleteTarget?.kind === "company"
+            ? `Are you sure you want to delete "${deleteTarget.label}"? This will also delete all associated projects. This cannot be undone.`
+            : `Are you sure you want to delete "${deleteTarget?.label}"? This cannot be undone.`
+        }
+        loading={deleting}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

@@ -172,5 +172,12 @@ export interface WorkflowStatusResponse {
       issue?: string;
     }>;
   };
+  image_details: {
+    prompt?: string;
+    image_path?: string;
+    image_url?: string;
+    model_used?: string;
+  };
+  image_generation_enabled: boolean;
   blog_version_id: number;
 }

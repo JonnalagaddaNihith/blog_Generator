@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Company } from "@/lib/types";
 import { getCompanies, deleteCompany } from "@/lib/api";
 import { CompanyCard } from "@/components/companies/CompanyCard";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -16,6 +17,8 @@ export default function CompaniesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     loadCompanies();
@@ -34,16 +37,23 @@ export default function CompaniesPage() {
     }
   };
 
-  const handleDelete = async (companyId: number) => {
-    if (!confirm("Are you sure you want to delete this company? This will also delete all associated projects.")) {
-      return;
-    }
+  const handleDelete = (companyId: number) => {
+    const company = companies.find((c) => c.id === companyId);
+    if (company) setCompanyToDelete(company);
+  };
 
+  const confirmDelete = async () => {
+    if (!companyToDelete) return;
+
+    setDeleting(true);
     try {
-      await deleteCompany(companyId);
-      setCompanies((prev) => prev.filter((c) => c.id !== companyId));
+      await deleteCompany(companyToDelete.id);
+      setCompanies((prev) => prev.filter((c) => c.id !== companyToDelete.id));
+      setCompanyToDelete(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete company");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -124,6 +134,17 @@ export default function CompaniesPage() {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={companyToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setCompanyToDelete(null);
+        }}
+        title="Delete Company"
+        description={`Are you sure you want to delete "${companyToDelete?.name}"? This will also delete all associated projects. This cannot be undone.`}
+        loading={deleting}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

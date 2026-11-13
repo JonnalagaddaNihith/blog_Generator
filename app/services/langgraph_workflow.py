@@ -787,6 +787,15 @@ class BlogGenerationWorkflow:
             )
             return blog.id
 
+    async def reset_workflow(self, project_id: int) -> None:
+        """Delete checkpointed state for a project so the workflow restarts from scratch."""
+        try:
+            checkpointer = await self._get_checkpointer()
+            await checkpointer.adelete_thread(str(project_id))
+            logger.info(f"Cleared workflow checkpoint for project {project_id}")
+        except Exception as e:
+            logger.warning(f"Failed to clear workflow checkpoint for project {project_id}: {e}")
+
     async def get_workflow_status(self, project_id: int) -> Dict[str, Any]:
         """
         Get the current status of the workflow.
@@ -825,6 +834,8 @@ class BlogGenerationWorkflow:
             "image_details": state.values.get("image_details", {}) if state.values else {},
             "quality_report": state.values.get("quality_report", {}) if state.values else {},
             "fact_verification_report": state.values.get("fact_verification_report", {}) if state.values else {},
+            "image_details": state.values.get("image_details", {}) if state.values else {},
+            "image_generation_enabled": settings.enable_image_generation,
             "blog_version_id": state.values.get("blog_version_id", 0) if state.values else 0,
         }
 

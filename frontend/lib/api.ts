@@ -11,7 +11,7 @@ import {
   BlogVersionUpdate,
 } from "./types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
 // Company API
 export async function createCompany(data: CompanyCreate): Promise<Company> {
@@ -86,7 +86,10 @@ export async function updateProject(projectId: number, data: ProjectUpdate): Pro
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error("Failed to update project");
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ detail: "Failed to update project" }));
+    throw new Error(errorData.detail || "Failed to update project");
+  }
   return res.json();
 }
 

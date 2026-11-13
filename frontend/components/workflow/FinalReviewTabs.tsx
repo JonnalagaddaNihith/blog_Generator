@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { CheckCircle2, AlertTriangle, RefreshCw, Download, Loader2, Edit, Save, X } from "lucide-react";
+import { CheckCircle2, AlertTriangle, RefreshCw, Download, Loader2, Edit, Save, X, ImageOff } from "lucide-react";
 
 interface Props {
   status: WorkflowStatusResponse;
@@ -29,7 +29,7 @@ export function FinalReviewTabs({
   onRefresh,
   projectId,
 }: Props) {
-  const { seo_metadata, quality_report, fact_verification_report, blog_content, is_complete, blog_version_id } = status;
+  const { seo_metadata, quality_report, fact_verification_report, blog_content, is_complete, blog_version_id, image_details, image_generation_enabled } = status;
   const [exportingPdf, setExportingPdf] = useState(false);
   const [pdfDownloadUrl, setPdfDownloadUrl] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState(false);
@@ -40,7 +40,6 @@ export function FinalReviewTabs({
     setExportingPdf(true);
     try {
       const result = await exportPdf(blog_version_id);
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
       setPdfDownloadUrl(new URL(result.download_url, apiBase).toString());
     } catch (err) {
       console.error("Failed to export PDF:", err);
@@ -68,6 +67,11 @@ export function FinalReviewTabs({
     setEditedContent(blog_content);
     setEditingContent(false);
   };
+
+  const apiBase = process.env.NEXT_PUBLIC_API_URL;
+  const imageUrl = image_details?.image_path
+    ? `${apiBase}/projects/${projectId}/workflow/image`
+    : null;
 
   const handleStartEdit = () => {
     setEditedContent(blog_content);
@@ -142,6 +146,7 @@ export function FinalReviewTabs({
         </TabsList>
 
         <TabsContent value="article">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -187,6 +192,41 @@ export function FinalReviewTabs({
               )}
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Featured Image</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {imageUrl ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    key={image_details?.image_path}
+                    src={imageUrl}
+                    alt="Generated featured image"
+                    className="w-full rounded-md border object-cover"
+                  />
+                  {image_details?.model_used && (
+                    <p className="text-xs text-muted-foreground">
+                      Model: {image_details.model_used}
+                    </p>
+                  )}
+                </>
+              ) : image_generation_enabled ? (
+                <div className="flex flex-col items-center gap-2 py-8 text-center text-sm text-muted-foreground">
+                  <ImageOff className="h-8 w-8 opacity-50" />
+                  <p>No image generated yet.</p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2 py-8 text-center text-sm text-muted-foreground">
+                  <ImageOff className="h-8 w-8 opacity-50" />
+                  <p>Image generation is disabled.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="seo">
