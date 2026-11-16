@@ -3,6 +3,7 @@ import hashlib
 from typing import Dict, Any, List
 from app.cache import cache_get, cache_set
 from app.utils.logger import logger
+from app.utils.markdown import markdown_to_plain_text
 
 
 class LanguageToolService:
@@ -30,7 +31,8 @@ class LanguageToolService:
         if not text or not text.strip():
             return {"issue_count": 0, "issues": []}
 
-        text = text[: self.MAX_TEXT_CHARS]
+        # LanguageTool expects plain text; strip Markdown syntax first
+        text = markdown_to_plain_text(text)[: self.MAX_TEXT_CHARS]
         cache_key = f"languagetool:{language}:{hashlib.md5(text.encode()).hexdigest()}"
         cached = await cache_get(cache_key)
         if cached:

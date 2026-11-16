@@ -1,9 +1,9 @@
 "use client";
 
-import { CheckCircle2, Circle, Loader2, PauseCircle } from "lucide-react";
+import { CheckCircle2, Circle, Loader2, PauseCircle, ImageOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-const STAGES = [
+const STAGES: { id: string; label: string; disabled?: boolean }[] = [
   { id: "web_research", label: "Web Research" },
   { id: "keyword_intelligence", label: "Keywords" },
   { id: "competitor_gap", label: "Competitor Gap" },
@@ -11,6 +11,7 @@ const STAGES = [
   { id: "blog_strategy_approval", label: "Outline Gate" },
   { id: "blog_writing", label: "Writing" },
   { id: "seo", label: "SEO & Schema" },
+  { id: "image", label: "Image", disabled: true },
   { id: "quality", label: "Quality Check" },
   { id: "fact_verification", label: "Fact-Check" },
   { id: "final_approval", label: "Final Gate" },
@@ -30,6 +31,17 @@ export function PipelineStepper({
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-4">
       {STAGES.map((stage, idx) => {
+        if (stage.disabled) {
+          return (
+            <div key={stage.id} className="flex items-center gap-2">
+              <Badge variant="outline" className="flex items-center gap-1.5 py-1 px-2.5 opacity-50">
+                <ImageOff className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>{stage.label}</span>
+              </Badge>
+            </div>
+          );
+        }
+
         const done = isComplete || (activeIndex > -1 && idx < activeIndex);
         const active = !isComplete && idx === activeIndex;
 

@@ -4,6 +4,7 @@ import textstat
 from app.services.openrouter import openrouter_service
 from app.services.languagetool import languagetool_service
 from app.utils.logger import logger, extract_json_from_llm_response
+from app.utils.markdown import markdown_to_plain_text
 
 
 def compute_readability_metrics(content: str) -> Dict[str, Any]:
@@ -89,8 +90,9 @@ Return the result as a JSON object with this structure:
 
             # Deterministic checks: textstat readability metrics + LanguageTool
             # grammar/style issues (real proofreading engine, not LLM guesswork)
-            readability_metrics = compute_readability_metrics(content)
-            lt_result = await languagetool_service.check(content)
+            plain_content = markdown_to_plain_text(content)
+            readability_metrics = compute_readability_metrics(plain_content)
+            lt_result = await languagetool_service.check(plain_content)
 
             logger.info(f"Quality validation completed: grammar={quality_data.get('grammar_score')}, readability={quality_data.get('readability_score')}, languagetool_issues={lt_result.get('issue_count')}")
 

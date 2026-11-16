@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Company } from "@/lib/types";
 import { getCompanies, deleteCompany } from "@/lib/api";
 import { CompanyCard } from "@/components/companies/CompanyCard";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";

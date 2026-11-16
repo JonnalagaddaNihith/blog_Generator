@@ -150,15 +150,42 @@ export interface WorkflowStatusResponse {
     meta_description?: string;
     keyword_density?: Record<string, number>;
     structured_data?: Record<string, unknown>;
-    rich_results?: { valid: boolean; errors: string[]; warnings: string[] };
+    rich_results?: {
+      valid: boolean;
+      errors: string[];
+      warnings: string[];
+      schema_org?: {
+        success: boolean;
+        valid: boolean;
+        num_objects: number;
+        errors: string[];
+        warnings: string[];
+      };
+    };
   };
   quality_report: {
     grammar_score?: number;
     readability_score?: number;
     overall_assessment?: string;
-    readability_metrics?: Record<string, number>;
+    issues?: Array<{ type?: string; location?: string; suggestion?: string }>;
+    readability_metrics?: {
+      word_count?: number;
+      sentence_count?: number;
+      avg_sentence_length?: number;
+      flesch_reading_ease?: number;
+      flesch_kincaid_grade?: number;
+      smog_index?: number;
+    };
     grammar_issue_count?: number;
-    grammar_issues?: Array<{ message: string; context: string; suggestions: string[] }>;
+    grammar_issues?: Array<{
+      message?: string;
+      rule?: string;
+      short_message?: string;
+      offset?: number;
+      length?: number;
+      context?: string;
+      suggestions?: string[];
+    }>;
   };
   fact_verification_report: {
     claims_verified?: number;
