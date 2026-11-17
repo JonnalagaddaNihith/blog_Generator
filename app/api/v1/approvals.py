@@ -40,7 +40,8 @@ async def create_approval(
     if not blog:
         raise HTTPException(status_code=404, detail="Blog version not found")
 
-    db_approval = Approval(**approval.model_dump())
+    # Use blog_id from URL instead of request body
+    db_approval = Approval(blog_version_id=blog_id, **approval.model_dump())
     db.add(db_approval)
     await db.commit()
     await db.refresh(db_approval)

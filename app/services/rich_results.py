@@ -1,8 +1,10 @@
 import httpx
 import json
+import textstat
 from typing import Dict, Any, List, Optional
 from app.config import settings
 from app.utils.logger import logger
+from app.utils.markdown import markdown_to_plain_text
 
 
 # Schema.org types relevant to blog articles and their required properties
@@ -53,7 +55,7 @@ class RichResultsService:
             "headline": title,
             "description": description,
             "keywords": ", ".join(keywords) if keywords else "",
-            "wordCount": len(content.split()) if content else 0,
+            "wordCount": textstat.lexicon_count(markdown_to_plain_text(content), removepunct=True) if content else 0,
         }
         if author:
             doc["author"] = {"@type": "Organization", "name": author}

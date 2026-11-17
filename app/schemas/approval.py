@@ -5,7 +5,6 @@ from app.models.approval import ApprovalStage, ApprovalStatus
 
 
 class ApprovalBase(BaseModel):
-    blog_version_id: int
     stage: Literal["outline", "final"]
     status: Literal["pending", "approved", "rejected"] = "pending"
     approver: Optional[str] = None
@@ -22,6 +21,7 @@ class ApprovalUpdate(BaseModel):
 
 class ApprovalResponse(ApprovalBase):
     id: int
+    blog_version_id: int
     stage: ApprovalStage
     status: ApprovalStatus
     approved_at: Optional[datetime] = None

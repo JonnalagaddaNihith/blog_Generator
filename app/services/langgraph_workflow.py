@@ -1,39 +1,62 @@
+"""Main workflow orchestration for blog generation."""
 from typing import Dict, Any, TypedDict, Sequence, Literal
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-from app.agents import (
-    web_research_agent,
-    keyword_intelligence_agent,
-    competitor_gap_agent,
-    blog_strategy_agent,
-    blog_writing_agent,
-    seo_agent,
-    image_agent,
-    quality_agent,
-    fact_verification_agent,
-)
 from app.database import AsyncSessionLocal
 from app.config import settings
-from app.models import (
-    Outline,
-    BlogVersion,
-    SEOMetadata,
-    ImageGeneration,
-    QualityReport,
-    FactVerificationReport,
-    Approval,
-)
-from app.models.outline import OutlineStatus
-from app.models.blog import BlogStatus
-from app.models.approval import ApprovalStage, ApprovalStatus
-from sqlalchemy import select, delete
-from datetime import datetime
+from app.services.workflow.graph import build_workflow_graph, WorkflowState
+from app.services.workflow.persistence import persist_workflow_output
 from app.utils.logger import logger
-import operator
 
 
-class WorkflowState(TypedDict):
+def _is_transient_connection_error(e: Exception) -> bool:
+    """Check if an exception is a transient connection error that warrants retry.
+
+    Returns True for:
+    - SQLAlchemy DisconnectionError (connection lost during operation)
+    - DBAPIError with connection-related error codes (PostgreSQL-specific)
+    - Connection timeout errors
+    Returns False for:
+    - Validation errors
+    - Business logic errors
+    - Not found errors
+    - Permission errors
+    """
+    from sqlalchemy.exc import DisconnectionError, DBAPIError
+    
+    if isinstance(e, DisconnectionError):
+        return True
+
+    if isinstance(e, DBAPIError):
+        # Check for PostgreSQL connection error codes
+        # 08001: connection does not exist
+        # 08003: connection not established
+        # 08006: connection failure
+        # 08007: transaction rollback due to failure
+        # 53XXX: all PostgreSQL connection-related errors
+        orig = e.orig
+        if orig and hasattr(orig, 'pgcode'):
+            pgcode = orig.pgcode
+            if pgcode in ('08001', '08003', '08006', '08007') or (pgcode and pgcode.startswith('53')):
+                return True
+
+    # Check for common connection error messages as fallback
+    error_msg = str(e).lower()
+    transient_keywords = [
+        'connection',
+        'timeout',
+        'network',
+        'broken pipe',
+        'connection refused',
+        'connection reset',
+        'could not connect',
+    ]
+    return any(keyword in error_msg for keyword in transient_keywords)
+
+
+class BlogGenerationWorkflowState(TypedDict):
+    """Typed state definition for the workflow."""
     project_id: int
     topic: str
     target_word_count: int
@@ -60,9 +83,13 @@ class WorkflowState(TypedDict):
     bypass_llm_cache: bool
     # ID of the persisted BlogVersion row (set when workflow completes)
     blog_version_id: int
+    # Status of persistence to database
+    persistence_status: Literal["pending", "success", "failed", None]
 
 
 class BlogGenerationWorkflow:
+    """Orchestrates the blog generation workflow using LangGraph."""
+    
     def __init__(self):
         self.graph = None
         self.checkpointer = None
@@ -107,84 +134,10 @@ class BlogGenerationWorkflow:
         if self.graph is not None:
             return self.graph
 
-        workflow = StateGraph(WorkflowState)
-
-        # Add nodes for each agent
-        workflow.add_node("web_research", self._web_research_node)
-        workflow.add_node("keyword_intelligence", self._keyword_intelligence_node)
-        workflow.add_node("competitor_gap", self._competitor_gap_node)
-        workflow.add_node("blog_strategy", self._blog_strategy_node)
-        workflow.add_node("blog_writing", self._blog_writing_node)
-        workflow.add_node("seo", self._seo_node)
-        # workflow.add_node("image", self._image_node) # uncomment when api is available
-        workflow.add_node("quality", self._quality_node)
-        workflow.add_node("fact_verification", self._fact_verification_node)
-
-        # Add conditional routing nodes
-        workflow.add_node("blog_strategy_approval", self._blog_strategy_approval_node)
-        workflow.add_node("final_approval", self._final_approval_node)
-        workflow.add_node("regenerate_outline", self._regenerate_outline_node)
-        workflow.add_node("regenerate_seo", self._regenerate_seo_node)
-        # workflow.add_node("regenerate_image", self._regenerate_image_node) # uncomment when api is available
-        workflow.add_node("regenerate_all", self._regenerate_all_node)
-        workflow.add_node("regenerate_verification", self._regenerate_verification_node)
-
-        # Stage 1: Research to Outline
-        workflow.set_entry_point("web_research")
-        workflow.add_edge("web_research", "keyword_intelligence")
-        workflow.add_edge("keyword_intelligence", "competitor_gap")
-        workflow.add_edge("competitor_gap", "blog_strategy")
-
-        # Blog Strategy approval checkpoint
-        workflow.add_edge("blog_strategy", "blog_strategy_approval")
-        workflow.add_conditional_edges(
-            "blog_strategy_approval",
-            self._check_blog_strategy_approval,
-            {
-                "approved": "blog_writing",
-                "regenerate": "regenerate_outline",
-                "pending": END  # Wait for human approval
-            }
-        )
-
-        # Stage 2: Writing to Final Verification
-        workflow.add_edge("blog_writing", "seo")
-        # workflow.add_edge("seo", "image")
-        workflow.add_edge("seo", "quality")
-        workflow.add_edge("quality", "fact_verification")
-
-        # Final approval checkpoint
-        workflow.add_edge("fact_verification", "final_approval")
-        workflow.add_conditional_edges(
-            "final_approval",
-            self._check_final_approval,
-            {
-                "approved": END,
-                "regenerate_outline": "regenerate_outline",
-                "regenerate_seo": "regenerate_seo",
-                # "regenerate_image": "regenerate_image",
-                "regenerate_verification": "regenerate_verification",
-                "regenerate_all": "regenerate_all",
-                "pending": END  # Wait for human approval
-            }
-        )
-
-        # Regeneration loops: each re-runs only its own node, then returns to
-        # the final approval checkpoint. State (outline, content, keywords,
-        # research) is read from the checkpoint — nothing upstream re-runs.
-        workflow.add_edge("regenerate_seo", "final_approval")
-        # workflow.add_edge("regenerate_image", "final_approval")
-        workflow.add_edge("regenerate_verification", "fact_verification")
-        # regenerate_all already produces blog+seo+image; continue to quality
-        # and fact verification so reports stay consistent (avoids re-running
-        # blog_writing/seo/image a second time).
-        workflow.add_edge("regenerate_all", "quality")
-
-        # Regenerate outline is reachable from both approval checkpoints and
-        # always returns to the first approval gate: a new outline invalidates
-        # any downstream content, so the user must approve the outline again
-        # before blog content, SEO, etc. are generated.
-        workflow.add_edge("regenerate_outline", "blog_strategy_approval")
+        workflow = StateGraph(BlogGenerationWorkflowState)
+        
+        # Build graph structure using the extracted function
+        workflow = build_workflow_graph(workflow, settings.enable_image_generation)
 
         # Compile with checkpointer. interrupt_before pauses the graph BEFORE
         # the approval nodes execute, so the thread stays resumable (unlike
@@ -199,290 +152,39 @@ class BlogGenerationWorkflow:
         return self.graph
 
     async def _aget_state_with_retry(self, config: Dict[str, Any]):
-        """Read graph state, rebuilding graph+checkpointer once on stale-connection errors."""
+        """Read graph state, rebuilding graph+checkpointer once on transient connection errors."""
         graph = await self.build_graph()
         try:
             return await graph.aget_state(config)
         except Exception as e:
-            logger.warning(f"aget_state failed ({e}); rebuilding graph/checkpointer")
-            await self._reset_graph()
-            graph = await self.build_graph()
-            return await graph.aget_state(config)
+            if _is_transient_connection_error(e):
+                logger.warning(f"aget_state failed with transient connection error ({e}); rebuilding graph/checkpointer")
+                await self._reset_graph()
+                graph = await self.build_graph()
+                return await graph.aget_state(config)
+            else:
+                # Non-transient error: raise immediately without retry
+                raise
 
-    async def _web_research_node(self, state: WorkflowState) -> WorkflowState:
-        """Execute web research agent."""
-        logger.info("Executing web research node")
-        result = await web_research_agent.execute(
-            topic=state["topic"],
-            company_description=state.get("company_description", ""),
-        )
-        state["research_results"] = result.get("results", [])
-        state["current_stage"] = "web_research"
-        return state
-
-    async def _keyword_intelligence_node(self, state: WorkflowState) -> WorkflowState:
-        """Execute keyword intelligence agent."""
-        logger.info("Executing keyword intelligence node")
-        result = await keyword_intelligence_agent.execute(
-            topic=state["topic"],
-            research_results=list(state["research_results"]),
-        )
-        state["keywords"] = result
-        state["current_stage"] = "keyword_intelligence"
-        return state
-
-    async def _competitor_gap_node(self, state: WorkflowState) -> WorkflowState:
-        """Execute competitor gap agent."""
-        logger.info("Executing competitor gap node")
-        result = await competitor_gap_agent.execute(
-            topic=state["topic"],
-            research_results=list(state["research_results"]),
-        )
-        state["competitor_analysis"] = result
-        state["current_stage"] = "competitor_gap"
-        return state
-
-    async def _blog_strategy_node(self, state: WorkflowState) -> WorkflowState:
-        """Execute blog strategy agent."""
-        logger.info("Executing blog strategy node")
-        result = await blog_strategy_agent.execute(
-            topic=state["topic"],
-            target_word_count=state["target_word_count"],
-            audience=state["audience"],
-            tone=state["tone"],
-            keywords=state["keywords"],
-            competitor_analysis=state["competitor_analysis"],
-            use_cache=not state.get("bypass_llm_cache", False),
-        )
-        state["outline"] = result
-        state["current_stage"] = "blog_strategy"
-        state["approval_status"] = "pending"
-        state["approval_stage"] = "blog_strategy"
-        return state
-
-    async def _blog_writing_node(self, state: WorkflowState) -> WorkflowState:
-        """Execute blog writing agent."""
-        logger.info("Executing blog writing node")
-        result = await blog_writing_agent.execute(
-            topic=state["topic"],
-            outline=state["outline"].get("outline", []),
-            keywords=state["keywords"],
-            tone=state["tone"],
-            audience=state["audience"],
-            target_word_count=state["target_word_count"],
-            use_cache=not state.get("bypass_llm_cache", False),
-        )
-        state["blog_content"] = result.get("content", "")
-        state["current_stage"] = "blog_writing"
-        return state
-
-    async def _seo_node(self, state: WorkflowState) -> WorkflowState:
-        """Execute SEO agent."""
-        logger.info("Executing SEO node")
-        result = await seo_agent.execute(
-            topic=state["topic"],
-            content=state["blog_content"],
-            keywords=state["keywords"],
-            use_cache=not state.get("bypass_llm_cache", False),
-        )
-        state["seo_metadata"] = result
-        state["current_stage"] = "seo"
-        return state
-
-    async def _image_node(self, state: WorkflowState) -> WorkflowState:
-        """Execute image agent."""
-        if not settings.enable_image_generation:
-            logger.info("Image generation is disabled, skipping")
-            state["current_stage"] = "image"
-            state["image_details"] = {}
-            return state
-        logger.info("Executing image node")
-        result = await image_agent.execute(
-            topic=state["topic"],
-            content=state["blog_content"],
-            tone=state["tone"],
-            use_cache=not state.get("bypass_llm_cache", False),
-        )
-        state["image_details"] = result
-        state["current_stage"] = "image"
-        return state
-
-    async def _quality_node(self, state: WorkflowState) -> WorkflowState:
-        """Execute quality agent."""
-        logger.info("Executing quality node")
-        result = await quality_agent.execute(
-            content=state["blog_content"],
-            use_cache=not state.get("bypass_llm_cache", False),
-        )
-        state["quality_report"] = result
-        state["current_stage"] = "quality"
-        return state
-
-    async def _fact_verification_node(self, state: WorkflowState) -> WorkflowState:
-        """Execute fact verification agent."""
-        logger.info("Executing fact verification node")
-        result = await fact_verification_agent.execute(
-            content=state["blog_content"],
-            research_results=list(state["research_results"]),
-            use_cache=not state.get("bypass_llm_cache", False),
-        )
-        state["fact_verification_report"] = result
-        state["current_stage"] = "fact_verification"
-        state["approval_status"] = "pending"
-        state["approval_stage"] = "final_review"
-        return state
-
-    async def _blog_strategy_approval_node(self, state: WorkflowState) -> WorkflowState:
-        """Check blog strategy approval status."""
-        logger.info(f"Blog strategy approval status: {state.get('approval_status')}")
-        state["current_stage"] = "blog_strategy_approval"
-        return state
-
-    async def _final_approval_node(self, state: WorkflowState) -> WorkflowState:
-        """Check final approval status."""
-        logger.info(f"Final approval status: {state.get('approval_status')}")
-        state["current_stage"] = "final_approval"
-        return state
-
-    def _check_blog_strategy_approval(self, state: WorkflowState) -> str:
-        """Determine next step based on blog strategy approval."""
-        approval = state.get("approval_status", "pending")
-        if approval == "approved":
-            return "approved"
-        elif approval == "regenerate":
-            return "regenerate"
-        else:
-            return "pending"
-
-    def _check_final_approval(self, state: WorkflowState) -> str:
-        """Determine next step based on final approval."""
-        approval = state.get("approval_status", "pending")
-        if approval == "approved":
-            return "approved"
-        elif approval == "regenerate":
-            regenerate_section = state.get("regenerate_section", "all")
-            # Blog content feeds SEO, image, quality and fact verification —
-            # regenerating it requires regenerating everything downstream.
-            if regenerate_section in ("blog_content", "blog"):
-                regenerate_section = "all"
-            return f"regenerate_{regenerate_section}"
-        else:
-            return "pending"
-
-    async def _regenerate_outline_node(self, state: WorkflowState) -> WorkflowState:
-        """Regenerate the outline via the blog strategy agent."""
-        logger.info("Regenerating outline")
-        state["current_stage"] = "regenerate_outline"
-        # User asked for fresh content — bypass the LLM response cache so a
-        # repeated regeneration doesn't return the cached outline.
-        state["bypass_llm_cache"] = True
-        # Reaching this node means the user asked for a new outline, so always
-        # regenerate via the agent regardless of regenerate_section. The
-        # approval is reset to the first gate: the user can then edit the
-        # outline, regenerate again, or approve it to resume content generation.
-        result = await blog_strategy_agent.execute(
-            topic=state["topic"],
-            target_word_count=state["target_word_count"],
-            audience=state["audience"],
-            tone=state["tone"],
-            keywords=state["keywords"],
-            competitor_analysis=state["competitor_analysis"],
-            use_cache=False,
-        )
-        state["outline"] = result
-        state["approval_status"] = "pending"
-        state["approval_stage"] = "blog_strategy"
-        return state
-
-    async def _regenerate_seo_node(self, state: WorkflowState) -> WorkflowState:
-        """Regenerate SEO metadata."""
-        logger.info("Regenerating SEO metadata")
-        state["current_stage"] = "regenerate_seo"
-        state["bypass_llm_cache"] = True
-        result = await seo_agent.execute(
-            topic=state["topic"],
-            content=state["blog_content"],
-            keywords=state["keywords"],
-            use_cache=False,
-        )
-        state["seo_metadata"] = result
-        state["approval_status"] = "pending"
-        state["approval_stage"] = "final_review"
-        return state
-
-    async def _regenerate_image_node(self, state: WorkflowState) -> WorkflowState:
-        """Regenerate image."""
-        if not settings.enable_image_generation:
-            logger.info("Image generation is disabled, skipping")
-            state["current_stage"] = "regenerate_image"
-            state["image_details"] = {}
-            state["approval_status"] = "pending"
-            state["approval_stage"] = "final_review"
-            return state
-        logger.info("Regenerating image")
-        state["current_stage"] = "regenerate_image"
-        state["bypass_llm_cache"] = True
-        result = await image_agent.execute(
-            topic=state["topic"],
-            content=state["blog_content"],
-            tone=state["tone"],
-            use_cache=False,
-        )
-        state["image_details"] = result
-        state["approval_status"] = "pending"
-        state["approval_stage"] = "final_review"
-        return state
-
-    async def _regenerate_verification_node(self, state: WorkflowState) -> WorkflowState:
-        """Re-run fact verification only, keeping all other outputs."""
-        logger.info("Regenerating fact verification")
-        state["current_stage"] = "regenerate_verification"
-        # The fact_verification node reads this flag to skip the LLM cache.
-        state["bypass_llm_cache"] = True
-        state["fact_verification_report"] = {}
-        return state
-
-    async def _regenerate_all_node(self, state: WorkflowState) -> WorkflowState:
-        """Regenerate entire blog from outline onwards."""
-        logger.info("Regenerating entire blog")
-        state["current_stage"] = "regenerate_all"
-        state["bypass_llm_cache"] = True
-        # Regenerate blog content
-        result = await blog_writing_agent.execute(
-            topic=state["topic"],
-            outline=state["outline"].get("outline", []),
-            keywords=state["keywords"],
-            tone=state["tone"],
-            audience=state["audience"],
-            target_word_count=state["target_word_count"],
-            use_cache=False,
-        )
-        state["blog_content"] = result.get("content", "")
-        # Regenerate SEO
-        seo_result = await seo_agent.execute(
-            topic=state["topic"],
-            content=state["blog_content"],
-            keywords=state["keywords"],
-            use_cache=False,
-        )
-        state["seo_metadata"] = seo_result
-        # Regenerate image only if enabled
-        if settings.enable_image_generation:
-            try:
-                image_result = await image_agent.execute(
-                    topic=state["topic"],
-                    content=state["blog_content"],
-                    tone=state["tone"],
-                    use_cache=False,
-                )
-                state["image_details"] = image_result
-            except Exception as e:
-                logger.warning(f"Image generation failed, continuing without image: {e}")
-                state["image_details"] = {}
-        else:
-            logger.info("Image generation is disabled, skipping")
-            state["image_details"] = {}
-        return state
+    def _validate_start_workflow_input(
+        self,
+        project_id: int,
+        topic: str,
+        target_word_count: int,
+        audience: str,
+        tone: str,
+    ) -> None:
+        """Validate input parameters for starting a workflow."""
+        if not isinstance(project_id, int) or project_id <= 0:
+            raise ValueError("project_id must be a positive integer")
+        if not topic or not isinstance(topic, str):
+            raise ValueError("topic must be a non-empty string")
+        if not isinstance(target_word_count, int) or target_word_count <= 0:
+            raise ValueError("target_word_count must be a positive integer")
+        if audience is not None and not isinstance(audience, str):
+            raise ValueError("audience must be a string")
+        if tone is not None and not isinstance(tone, str):
+            raise ValueError("tone must be a string")
 
     async def start_workflow(
         self,
@@ -496,10 +198,27 @@ class BlogGenerationWorkflow:
     ) -> str:
         """
         Start the workflow and return the thread ID.
+        
+        Args:
+            project_id: The project ID to associate with this workflow
+            topic: The blog topic
+            target_word_count: Target word count for the blog
+            audience: Target audience
+            tone: Writing tone
+            company_description: Optional company description
+            company_website: Optional company website
+            
+        Returns:
+            The thread ID for this workflow instance
         """
+        # Validate inputs
+        self._validate_start_workflow_input(
+            project_id, topic, target_word_count, audience, tone
+        )
+        
         graph = await self.build_graph()
 
-        initial_state: WorkflowState = {
+        initial_state: BlogGenerationWorkflowState = {
             "project_id": project_id,
             "topic": topic,
             "target_word_count": target_word_count,
@@ -523,6 +242,7 @@ class BlogGenerationWorkflow:
             "regenerate_section": None,
             "bypass_llm_cache": False,
             "blog_version_id": 0,
+            "persistence_status": None,
         }
 
         # Use project_id as thread_id for simplicity
@@ -542,6 +262,25 @@ class BlogGenerationWorkflow:
         logger.info(f"Workflow started with thread_id: {thread_id}")
         return thread_id
 
+    def _validate_resume_workflow_input(
+        self,
+        project_id: int,
+        action: str,
+        regenerate_section: str = None,
+    ) -> None:
+        """Validate input parameters for resuming a workflow."""
+        if not isinstance(project_id, int) or project_id <= 0:
+            raise ValueError("project_id must be a positive integer")
+        
+        valid_actions = ["approve", "reject", "regenerate", "retry_persistence"]
+        if action not in valid_actions:
+            raise ValueError(f"action must be one of {valid_actions}")
+        
+        if action == "regenerate" and regenerate_section:
+            valid_sections = ["outline", "blog_content", "seo", "image", "verification", "all"]
+            if regenerate_section not in valid_sections:
+                raise ValueError(f"regenerate_section must be one of {valid_sections}")
+
     async def resume_workflow(
         self,
         project_id: int,
@@ -552,14 +291,32 @@ class BlogGenerationWorkflow:
         """
         Resume the workflow after approval/rejection.
 
-        Retries once after rebuilding the graph/checkpointer — covers stale
-        DB connections left behind by a postgres restart.
+        Retries once after rebuilding the graph/checkpointer on transient
+        connection errors only — covers stale DB connections left behind by
+        a postgres restart. Non-transient errors are raised immediately.
+        
+        Args:
+            project_id: Project ID
+            action: "approve", "reject", "regenerate", or "retry_persistence"
+            updated_outline: User-edited outline (optional)
+            regenerate_section: "outline", "blog_content", "seo", "image", "verification", or "all"
+            
+        Returns:
+            The workflow state after resuming
         """
+        # Validate inputs
+        self._validate_resume_workflow_input(project_id, action, regenerate_section)
+        
         try:
             return await self._resume_workflow(project_id, action, updated_outline, regenerate_section)
-        except Exception:
-            await self._reset_graph()
-            return await self._resume_workflow(project_id, action, updated_outline, regenerate_section)
+        except Exception as e:
+            if _is_transient_connection_error(e):
+                logger.warning(f"resume_workflow failed with transient connection error ({e}); rebuilding graph/checkpointer")
+                await self._reset_graph()
+                return await self._resume_workflow(project_id, action, updated_outline, regenerate_section)
+            else:
+                # Non-transient error: raise immediately without retry
+                raise
 
     async def _resume_workflow(
         self,
@@ -570,16 +327,20 @@ class BlogGenerationWorkflow:
     ) -> Dict[str, Any]:
         """
         Resume the workflow after approval/rejection.
-        
+
         Args:
             project_id: Project ID
-            action: "approve", "reject", or "regenerate"
+            action: "approve", "reject", "regenerate", or "retry_persistence"
             updated_outline: User-edited outline (optional)
-            regenerate_section: "outline", "blog_content", "seo", "image", or "all"
+            regenerate_section: "outline", "blog_content", "seo", "image", "verification", or "all"
         """
         graph = await self.build_graph()
         thread_id = str(project_id)
         config = {"configurable": {"thread_id": thread_id}}
+
+        # Handle retry_persistence action separately
+        if action == "retry_persistence":
+            return await self._retry_persistence(graph, config)
 
         # Build update dict with only the fields that changed
         update_dict = {}
@@ -618,177 +379,57 @@ class BlogGenerationWorkflow:
             and final_state.values.get("approval_status") == "approved"
         ):
             try:
-                blog_version_id = await self._persist_workflow_output(final_state.values)
-                if blog_version_id:
-                    await graph.aupdate_state(config, {"blog_version_id": blog_version_id})
+                async with AsyncSessionLocal() as db:
+                    blog_version_id = await persist_workflow_output(db, final_state.values)
+                    if blog_version_id:
+                        await graph.aupdate_state(config, {"blog_version_id": blog_version_id, "persistence_status": "success"})
+                    else:
+                        await graph.aupdate_state(config, {"persistence_status": "failed"})
+                        raise Exception("Persistence returned zero blog_version_id")
             except Exception as e:
                 logger.error(f"Failed to persist workflow output: {e}")
+                await graph.aupdate_state(config, {"persistence_status": "failed"})
+                raise
 
         return result
 
-    async def _persist_workflow_output(self, state: Dict[str, Any]) -> int:
+    async def _retry_persistence(self, graph, config: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Save final workflow output to the database so the REST APIs
-        (blogs, SEO metadata, reports, approvals, PDF export) work.
-        Upserts the latest Outline/BlogVersion for the project.
-        Returns the BlogVersion id.
+        Retry persistence of workflow output without regenerating content.
+
+        Used when the initial persistence attempt failed but content is available.
         """
-        project_id = state.get("project_id")
-        if not project_id or not state.get("blog_content"):
-            return 0
+        logger.info("Retrying workflow output persistence")
+        current_state = await graph.aget_state(config)
 
-        async with AsyncSessionLocal() as db:
-            # --- Outline (latest for project) ---
-            outline_row = (
-                await db.execute(
-                    select(Outline)
-                    .where(Outline.project_id == project_id)
-                    .order_by(Outline.id.desc())
-                )
-            ).scalars().first()
-            outline_data = state.get("outline") or {}
-            if outline_row:
-                outline_row.structure = outline_data
-                outline_row.status = OutlineStatus.approved
-            else:
-                outline_row = Outline(
-                    project_id=project_id,
-                    structure=outline_data,
-                    status=OutlineStatus.approved,
-                )
-                db.add(outline_row)
-            await db.flush()
+        if not current_state.values:
+            raise Exception("No workflow state found for retry")
 
-            # --- Blog version (latest for project) ---
-            blog = (
-                await db.execute(
-                    select(BlogVersion)
-                    .where(BlogVersion.project_id == project_id)
-                    .order_by(BlogVersion.id.desc())
-                )
-            ).scalars().first()
-            if blog:
-                blog.content = state.get("blog_content")
-                blog.outline_id = outline_row.id
-                blog.status = BlogStatus.approved
-            else:
-                blog = BlogVersion(
-                    project_id=project_id,
-                    outline_id=outline_row.id,
-                    content=state.get("blog_content"),
-                    status=BlogStatus.approved,
-                )
-                db.add(blog)
-            await db.flush()
+        # Check if we have the necessary data to persist
+        if not current_state.values.get("blog_content"):
+            raise Exception("No blog content available to persist")
 
-            # --- SEO metadata (one per blog version) ---
-            seo = state.get("seo_metadata") or {}
-            seo_row = (
-                await db.execute(
-                    select(SEOMetadata).where(SEOMetadata.blog_version_id == blog.id)
-                )
-            ).scalars().first()
-            seo_fields = {
-                "title": seo.get("title"),
-                "meta_description": seo.get("meta_description"),
-                "keywords": seo.get("keyword_density"),
-            }
-            if seo_row:
-                for field, value in seo_fields.items():
-                    setattr(seo_row, field, value)
-            else:
-                db.add(SEOMetadata(blog_version_id=blog.id, **seo_fields))
-
-            # --- Image generation (optional; only present if image agent ran) ---
-            image = state.get("image_details") or {}
-            if image.get("image_path"):
-                img_row = (
-                    await db.execute(
-                        select(ImageGeneration).where(
-                            ImageGeneration.blog_version_id == blog.id
-                        )
-                    )
-                ).scalars().first()
-                img_fields = {
-                    "prompt": image.get("prompt"),
-                    "image_path": image.get("image_path"),
-                    "model_used": image.get("model_used"),
-                }
-                if img_row:
-                    for field, value in img_fields.items():
-                        setattr(img_row, field, value)
+        try:
+            async with AsyncSessionLocal() as db:
+                blog_version_id = await persist_workflow_output(db, current_state.values)
+                if blog_version_id:
+                    await graph.aupdate_state(config, {"blog_version_id": blog_version_id, "persistence_status": "success"})
+                    logger.info(f"Retry persistence successful: blog_version_id={blog_version_id}")
                 else:
-                    db.add(ImageGeneration(blog_version_id=blog.id, **img_fields))
+                    await graph.aupdate_state(config, {"persistence_status": "failed"})
+                    raise Exception("Retry persistence returned zero blog_version_id")
+        except Exception as e:
+            logger.error(f"Retry persistence failed: {e}")
+            await graph.aupdate_state(config, {"persistence_status": "failed"})
+            raise
 
-            # --- Quality report ---
-            quality = state.get("quality_report") or {}
-            quality_row = (
-                await db.execute(
-                    select(QualityReport).where(QualityReport.blog_version_id == blog.id)
-                )
-            ).scalars().first()
-            quality_fields = {
-                "grammar_score": quality.get("grammar_score"),
-                "readability_score": quality.get("readability_score"),
-                "issues": quality.get("issues"),
-            }
-            if quality_row:
-                for field, value in quality_fields.items():
-                    setattr(quality_row, field, value)
-            else:
-                db.add(QualityReport(blog_version_id=blog.id, **quality_fields))
-
-            # --- Fact verification report ---
-            verification = state.get("fact_verification_report") or {}
-            verification_row = (
-                await db.execute(
-                    select(FactVerificationReport).where(
-                        FactVerificationReport.blog_version_id == blog.id
-                    )
-                )
-            ).scalars().first()
-            verification_fields = {
-                "claims_verified": verification.get("claims_verified"),
-                "sources": verification.get("sources"),
-                "confidence_score": verification.get("confidence_score"),
-            }
-            if verification_row:
-                for field, value in verification_fields.items():
-                    setattr(verification_row, field, value)
-            else:
-                db.add(FactVerificationReport(blog_version_id=blog.id, **verification_fields))
-
-            # --- Approval records (replace existing for idempotency) ---
-            await db.execute(
-                delete(Approval).where(Approval.blog_version_id == blog.id)
-            )
-            now = datetime.utcnow()
-            db.add(
-                Approval(
-                    blog_version_id=blog.id,
-                    stage=ApprovalStage.outline,
-                    status=ApprovalStatus.approved,
-                    approved_at=now,
-                )
-            )
-            db.add(
-                Approval(
-                    blog_version_id=blog.id,
-                    stage=ApprovalStage.final,
-                    status=ApprovalStatus.approved,
-                    approved_at=now,
-                )
-            )
-
-            await db.commit()
-            logger.info(
-                f"Persisted workflow output for project {project_id}: "
-                f"outline_id={outline_row.id}, blog_version_id={blog.id}"
-            )
-            return blog.id
+        return {"current_stage": "final_approval", "persistence_status": "success"}
 
     async def reset_workflow(self, project_id: int) -> None:
         """Delete checkpointed state for a project so the workflow restarts from scratch."""
+        if not isinstance(project_id, int) or project_id <= 0:
+            raise ValueError("project_id must be a positive integer")
+            
         try:
             checkpointer = await self._get_checkpointer()
             await checkpointer.adelete_thread(str(project_id))
@@ -799,7 +440,16 @@ class BlogGenerationWorkflow:
     async def get_workflow_status(self, project_id: int) -> Dict[str, Any]:
         """
         Get the current status of the workflow.
+        
+        Args:
+            project_id: The project ID to query
+            
+        Returns:
+            Dictionary containing workflow status information
         """
+        if not isinstance(project_id, int) or project_id <= 0:
+            raise ValueError("project_id must be a positive integer")
+            
         thread_id = str(project_id)
         config = {"configurable": {"thread_id": thread_id}}
 
@@ -834,9 +484,9 @@ class BlogGenerationWorkflow:
             "image_details": state.values.get("image_details", {}) if state.values else {},
             "quality_report": state.values.get("quality_report", {}) if state.values else {},
             "fact_verification_report": state.values.get("fact_verification_report", {}) if state.values else {},
-            "image_details": state.values.get("image_details", {}) if state.values else {},
             "image_generation_enabled": settings.enable_image_generation,
             "blog_version_id": state.values.get("blog_version_id", 0) if state.values else 0,
+            "persistence_status": state.values.get("persistence_status", None) if state.values else None,
         }
 
 

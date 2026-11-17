@@ -15,7 +15,7 @@ router = APIRouter()
 
 
 class WorkflowApprovalRequest(BaseModel):
-    action: str  # "approve", "reject", or "regenerate"
+    action: str  # "approve", "reject", "regenerate", or "retry_persistence"
     updated_outline: dict = None
     regenerate_section: str = None  # "outline", "blog_content", "seo", "image", "verification", or "all"
 
@@ -63,7 +63,7 @@ async def approve_workflow(
     request: WorkflowApprovalRequest,
     db: AsyncSession = Depends(get_current_db),
 ):
-    """Approve, reject, or regenerate workflow at current stage."""
+    """Approve, reject, regenerate, or retry persistence for workflow at current stage."""
     # Verify project exists
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
@@ -78,7 +78,15 @@ async def approve_workflow(
                 status_code=400,
                 detail="Workflow has not been started for this project. Please start the workflow first."
             )
-        
+
+        # For retry_persistence, check if there's content to persist
+        if request.action == "retry_persistence":
+            if not status.get("blog_content"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="No blog content available to persist. Cannot retry persistence."
+                )
+
         final_state = await blog_generation_workflow.resume_workflow(
             project_id=project_id,
             action=request.action,
@@ -90,11 +98,18 @@ async def approve_workflow(
             "message": f"Workflow {request.action} successfully",
             "project_id": project_id,
             "current_stage": final_state.get("current_stage"),
+            "persistence_status": final_state.get("persistence_status"),
         }
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error approving workflow: {e}")
+        # Check if this is a persistence failure
+        if "persist" in str(e).lower():
+            raise HTTPException(
+                status_code=503,
+                detail=f"Failed to persist blog to database: {str(e)}. Content is saved and can be retried with action='retry_persistence'."
+            )
         raise HTTPException(status_code=500, detail=f"Failed to approve workflow: {str(e)}")
 
 
