@@ -111,6 +111,12 @@ export async function startWorkflow(projectId: number): Promise<{ message: strin
   return res.json();
 }
 
+export async function createProjectAndStartWorkflow(data: ProjectCreate): Promise<Project> {
+  const project = await createProject(data);
+  await startWorkflow(project.id);
+  return project;
+}
+
 export async function getWorkflowStatus(projectId: number): Promise<WorkflowStatusResponse> {
   const res = await fetch(`${API_BASE}/projects/${projectId}/workflow/status`, {
     cache: "no-store",

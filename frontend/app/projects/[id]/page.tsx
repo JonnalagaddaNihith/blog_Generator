@@ -7,6 +7,7 @@ import { useWorkflowPolling } from "@/hooks/useWorkflowPolling";
 import { resumeWorkflow, getProject, getCompany } from "@/lib/api";
 import { Project, Company } from "@/lib/types";
 import { PipelineStepper } from "@/components/workflow/PipelineStepper";
+import { FullPageLoader } from "@/components/ui/FullPageLoader";
 import { OutlineReviewCard } from "@/components/workflow/OutlineReviewCard";
 import { FinalReviewTabs } from "@/components/workflow/FinalReviewTabs";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -71,32 +72,24 @@ function ProjectWorkflowContent({ projectId }: { projectId: number }) {
     setWorkflowError(null);
     try {
       await resumeWorkflow(projectId, payload);
-      const notifyAndReload = (title: string, description: string) => {
-        toast.success(title, { description });
-        setTimeout(() => window.location.reload(), 800);
+      const notify = (title: string, description?: string) => {
+        toast.success(title, description ? { description } : undefined);
       };
       if (payload.action === "regenerate") {
         const section = payload.regenerate_section || "all";
-        notifyAndReload(
-          section === "all" ? "Article regenerated" : `${section.replace("_", " ")} regenerated`,
-          "Reloading to show the updated content…"
+        notify(
+          section === "all" ? "Article regenerated" : `${section.replace("_", " ")} regenerated`
         );
-        return;
       }
       if (payload.action === "approve") {
         // Approving the outline runs the whole pipeline (writing, SEO,
         // quality, fact-check) and pauses at the final review gate.
         if (status?.approval_stage === "blog_strategy") {
-          notifyAndReload(
-            "Article generated",
-            "Blog content, SEO, quality & fact-check are ready — reloading…"
-          );
-          return;
+          notify("Article generated", "Blog content, SEO, quality & fact-check are ready.");
         }
         // Approving the final review completes the workflow.
         if (status?.approval_stage === "final_review") {
-          notifyAndReload("Blog finalized", "Reloading to show the final version…");
-          return;
+          notify("Blog finalized");
         }
       }
       await refresh();
@@ -109,6 +102,7 @@ function ProjectWorkflowContent({ projectId }: { projectId: number }) {
 
   return (
     <div className="container mx-auto max-w-5xl space-y-6 py-8">
+      {submitting && <FullPageLoader />}
       <Breadcrumb className="mb-4">
         <BreadcrumbList>
           <BreadcrumbItem>

@@ -1,8 +1,7 @@
 from typing import Dict, Any, List
-import json
 from app.services.openrouter import openrouter_service
 from app.services.google_suggestions import google_suggestions_service
-from app.utils.logger import logger, extract_json_from_llm_response
+from app.utils.logger import logger, extract_json_from_llm_response, safe_json_loads
 
 
 class KeywordIntelligenceAgent:
@@ -49,7 +48,7 @@ class KeywordIntelligenceAgent:
                 f"Based on the following research results for the topic \"{topic}\", extract keywords:\n\nResearch Context:\n{context}",
                 multiplier=2
             )
-            
+
             prompt = f"""
 Based on the following research results for the topic "{topic}", extract keywords:
 
@@ -82,17 +81,17 @@ Return the result as a JSON object with this structure:
 
             if response is None:
                 raise ValueError("LLM response is None")
-            
+
             logger.info(f"LLM response length: {len(response)}")
             logger.info(f"LLM response preview: {response[:500]}")
 
             json_str = extract_json_from_llm_response(response)
             logger.info(f"Extracted JSON string length: {len(json_str)}")
-            
+
             if not json_str:
                 raise ValueError("Extracted JSON string is empty")
-            
-            keywords_data = json.loads(json_str)
+
+            keywords_data = safe_json_loads(json_str)
 
             # Query autocomplete again using the extracted primary keywords as
             # seeds — natural phrases return far more suggestions than the raw

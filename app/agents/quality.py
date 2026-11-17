@@ -3,7 +3,7 @@ import json
 import textstat
 from app.services.openrouter import openrouter_service
 from app.services.languagetool import languagetool_service
-from app.utils.logger import logger, extract_json_from_llm_response
+from app.utils.logger import logger, extract_json_from_llm_response, safe_json_loads
 from app.utils.markdown import markdown_to_plain_text
 
 
@@ -40,7 +40,7 @@ class QualityAgent:
                 f"Analyze the following blog content for quality:\n\nBlog Content:\n{content}",
                 multiplier=3
             )
-            
+
             prompt = f"""
 Analyze the following blog content for quality:
 
@@ -76,17 +76,17 @@ Return the result as a JSON object with this structure:
 
             if response is None:
                 raise ValueError("LLM response is None")
-            
+
             logger.info(f"LLM response length: {len(response)}")
             logger.info(f"LLM response preview: {response[:500]}")
 
             json_str = extract_json_from_llm_response(response)
             logger.info(f"Extracted JSON string length: {len(json_str)}")
-            
+
             if not json_str:
                 raise ValueError("Extracted JSON string is empty")
-            
-            quality_data = json.loads(json_str)
+
+            quality_data = safe_json_loads(json_str)
 
             # Deterministic checks: textstat readability metrics + LanguageTool
             # grammar/style issues (real proofreading engine, not LLM guesswork)

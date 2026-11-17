@@ -2,7 +2,7 @@ from typing import Dict, Any, List
 import json
 from app.services.openrouter import openrouter_service
 from app.services.content_fetcher import content_fetcher
-from app.utils.logger import logger, extract_json_from_llm_response
+from app.utils.logger import logger, extract_json_from_llm_response, safe_json_loads
 
 
 class CompetitorGapAgent:
@@ -87,7 +87,7 @@ Return the result as a JSON object with this structure:
             if not json_str:
                 raise ValueError("Extracted JSON string is empty")
             
-            analysis_data = json.loads(json_str)
+            analysis_data = safe_json_loads(json_str)
 
             logger.info(f"Competitor gap analysis completed: {len(analysis_data.get('competitors', []))} competitors identified")
 

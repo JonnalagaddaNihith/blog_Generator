@@ -3,13 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Company } from "@/lib/types";
-import { createProject, startWorkflow } from "@/lib/api";
+import { createProjectAndStartWorkflow } from "@/lib/api";
 import { CompanySelector } from "@/components/companies/CompanySelector";
+import { ProjectFormFields } from "@/components/projects/ProjectFormFields";
+import { FullPageLoader } from "@/components/ui/FullPageLoader";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Sparkles, Loader2, ArrowRight } from "lucide-react";
 
@@ -47,17 +46,13 @@ export default function HomePage() {
     setError(null);
 
     try {
-      // Step 1: Create project
-      const project = await createProject({
+      const project = await createProjectAndStartWorkflow({
         company_id: selectedCompany.id,
         topic: formData.topic,
         target_word_count: formData.target_word_count,
         audience: formData.audience,
         tone: formData.tone,
       });
-
-      // Step 2: Start workflow
-      await startWorkflow(project.id);
 
       router.push(`/projects/${project.id}`);
     } catch (err) {
@@ -68,6 +63,7 @@ export default function HomePage() {
 
   return (
     <div className="container mx-auto max-w-3xl py-12">
+      {loading && <FullPageLoader />}
       <div className="mb-8 text-center">
         <h1 className="text-3xl font-extrabold tracking-tight">AI Blog Generator Studio</h1>
         <p className="mt-2 text-muted-foreground">
@@ -120,60 +116,7 @@ export default function HomePage() {
                 </Alert>
               )}
 
-              <div className="space-y-2">
-                <Label htmlFor="topic">Blog Topic / Working Title *</Label>
-                <Input
-                  id="topic"
-                  placeholder="e.g., Building Multi-Agent AI Workflows with LangGraph and Python"
-                  value={formData.topic}
-                  onChange={(e) => setFormData({ ...formData, topic: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="wordCount">Target Word Count</Label>
-                  <Input
-                    id="wordCount"
-                    type="number"
-                    step="100"
-                    min="100"
-                    max="10000"
-                    value={formData.target_word_count}
-                    onChange={(e) => setFormData({ ...formData, target_word_count: parseInt(e.target.value) || 500 })}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="tone">Content Tone</Label>
-                  <Select
-                    value={formData.tone}
-                    onValueChange={(val) => setFormData({ ...formData, tone: val })}
-                  >
-                    <SelectTrigger id="tone">
-                      <SelectValue placeholder="Select tone" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Professional yet engaging">Professional & Engaging</SelectItem>
-                      <SelectItem value="Technical and authoritative">Technical & Authoritative</SelectItem>
-                      <SelectItem value="Casual and conversational">Casual & Conversational</SelectItem>
-                      <SelectItem value="Persuasive and marketing-focused">Persuasive & Marketing</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="audience">Target Audience</Label>
-                <Input
-                  id="audience"
-                  placeholder="e.g., Software Engineers, CTOs, Founders"
-                  value={formData.audience}
-                  onChange={(e) => setFormData({ ...formData, audience: e.target.value })}
-                />
-              </div>
+              <ProjectFormFields value={formData} onChange={setFormData} />
             </CardContent>
             <CardFooter className="flex justify-end border-t pt-4">
               <Button type="submit" disabled={loading}>

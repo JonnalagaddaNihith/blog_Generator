@@ -1,7 +1,6 @@
 from typing import Dict, Any, List
-import json
 from app.services.openrouter import openrouter_service
-from app.utils.logger import logger, extract_json_from_llm_response
+from app.utils.logger import logger, extract_json_from_llm_response, safe_json_loads
 
 
 class BlogStrategyAgent:
@@ -36,7 +35,7 @@ class BlogStrategyAgent:
                 f"Generate a blog strategy and structured outline for the following:\n\nTopic: {topic}\nTarget Word Count: {target_word_count}\nTarget Audience: {audience}\nTone: {tone}\n\nPrimary Keywords: {', '.join(primary_keywords)}\n\nCompetitor Gaps: {', '.join(gaps[:5])}\nOpportunities: {', '.join(opportunities[:5])}",
                 multiplier=4
             )
-            
+
             prompt = f"""
 Generate a blog strategy and structured outline for the following:
 
@@ -78,17 +77,17 @@ Return the result as a JSON object with this structure:
 
             if response is None:
                 raise ValueError("LLM response is None")
-            
+
             logger.info(f"LLM response length: {len(response)}")
             logger.info(f"LLM response preview: {response[:500]}")
 
             json_str = extract_json_from_llm_response(response)
             logger.info(f"Extracted JSON string length: {len(json_str)}")
-            
+
             if not json_str:
                 raise ValueError("Extracted JSON string is empty")
-            
-            strategy_data = json.loads(json_str)
+
+            strategy_data = safe_json_loads(json_str)
 
             logger.info(f"Blog strategy completed: {len(strategy_data.get('outline', []))} sections in outline")
 

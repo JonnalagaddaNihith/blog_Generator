@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 from app.services.openrouter import openrouter_service
 from app.services.content_fetcher import content_fetcher
 from app.services.fact_check import fact_check_service
-from app.utils.logger import logger, extract_json_from_llm_response
+from app.utils.logger import logger, extract_json_from_llm_response, safe_json_loads
 
 
 def _extract_url(value: Any) -> str:
@@ -117,7 +117,7 @@ Return ONLY a JSON object:
             if claims_response:
                 try:
                     claims_json = extract_json_from_llm_response(claims_response)
-                    extracted_claims = json.loads(claims_json).get("claims", [])[:8]
+                    extracted_claims = safe_json_loads(claims_json).get("claims", [])[:8]
                 except Exception as e:
                     logger.warning(f"Claim extraction failed: {e}")
 
@@ -206,7 +206,7 @@ Rules:
             if not json_str:
                 raise ValueError("Extracted JSON string is empty")
 
-            verification_data = json.loads(json_str)
+            verification_data = safe_json_loads(json_str)
 
             # Normalize claims list (accept legacy "sources" key too)
             claims = verification_data.get("claims") or verification_data.get("sources", [])

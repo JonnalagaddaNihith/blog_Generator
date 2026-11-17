@@ -3,7 +3,7 @@ import json
 import re
 from app.services.openrouter import openrouter_service
 from app.services.rich_results import rich_results_service
-from app.utils.logger import logger, extract_json_from_llm_response
+from app.utils.logger import logger, extract_json_from_llm_response, safe_json_loads
 
 
 def compute_keyword_density(content: str, keywords: List[str]) -> Dict[str, float]:
@@ -54,7 +54,7 @@ class SEOAgent:
                 f"Optimize the following blog content for SEO:\n\nTopic: {topic}\n\nPrimary Keywords: {', '.join(primary_keywords)}\nSecondary Keywords: {', '.join(secondary_keywords[:10])}\n\nBlog Content (first 2000 characters):\n{content[:2000]}",
                 multiplier=3
             )
-            
+
             prompt = f"""
 Optimize the following blog content for SEO:
 
@@ -88,17 +88,17 @@ Return the result as a JSON object with this structure:
 
             if response is None:
                 raise ValueError("LLM response is None")
-            
+
             logger.info(f"LLM response length: {len(response)}")
             logger.info(f"LLM response preview: {response[:500]}")
 
             json_str = extract_json_from_llm_response(response)
             logger.info(f"Extracted JSON string length: {len(json_str)}")
-            
+
             if not json_str:
                 raise ValueError("Extracted JSON string is empty")
-            
-            seo_data = json.loads(json_str)
+
+            seo_data = safe_json_loads(json_str)
 
             # Keyword density is computed deterministically — the LLM's
             # estimate is unreliable. Prefer the computed values.
