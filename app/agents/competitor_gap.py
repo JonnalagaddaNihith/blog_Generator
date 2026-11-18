@@ -42,7 +42,7 @@ class CompetitorGapAgent:
             # Calculate char limit first
             char_limit = openrouter_service._calculate_char_limit(
                 f"Based on the following research results for the topic \"{topic}\", analyze competitor content:\n\nResearch Context:\n{context}",
-                multiplier=5
+                multiplier=8
             )
             
             prompt = f"""
@@ -72,7 +72,7 @@ Return the result as a JSON object with this structure:
             response, _ = await openrouter_service.generate_text(
                 prompt=prompt,
                 temperature=0.6,
-                multiplier=5,
+                multiplier=8,
             )
 
             if response is None:

@@ -1,5 +1,5 @@
 import httpx
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any, Optional
 from app.config import settings
 from app.cache import cache_get, cache_set
 from app.utils.logger import logger
@@ -10,7 +10,6 @@ class OpenRouterService:
         self.api_key = settings.openrouter_api_key
         self.base_url = "https://openrouter.ai/api/v1"
         self.text_model = settings.openrouter_text_model
-        self.image_model = settings.openrouter_image_model
         self.timeout = 300.0
 
     def _get_headers(self) -> Dict[str, str]:
@@ -165,75 +164,6 @@ class OpenRouterService:
             raise
         except Exception as e:
             logger.error(f"Unexpected error during text generation: {e}")
-            raise
-
-    async def generate_image(
-        self,
-        prompt: str,
-        size: str = "1024x1024",
-        model: Optional[str] = None,
-        use_cache: bool = True,
-    ) -> Dict[str, Any]:
-        """
-        Generate image using OpenRouter API.
-        Returns dictionary with image_url, model_used, etc.
-        """
-        cache_key = f"image:{model or self.image_model}:{hash(prompt)}:{size}"
-        if use_cache:
-            cached = await cache_get(cache_key)
-            if cached:
-                logger.info(f"Cache hit for image generation")
-                return cached
-
-        try:
-            payload = {
-                "model": model or self.image_model,
-                "prompt": prompt,
-                "size": size,
-            }
-
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    f"{self.base_url}/images/generations",
-                    headers=self._get_headers(),
-                    json=payload,
-                )
-                response.raise_for_status()
-                data = response.json()
-
-                result = {
-                    "image_url": data["data"][0]["url"],
-                    "model_used": model or self.image_model,
-                    "prompt": prompt,
-                    "size": size,
-                }
-
-                if use_cache:
-                    await cache_set(cache_key, result, expire_seconds=86400)
-                logger.info(f"Successfully generated image using model: {model or self.image_model}")
-                return result
-
-        except httpx.HTTPError as e:
-            logger.error(f"HTTP error during image generation: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Unexpected error during image generation: {e}")
-            raise
-
-    async def download_image(self, image_url: str) -> bytes:
-        """
-        Download image from URL.
-        """
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(image_url)
-                response.raise_for_status()
-                return response.content
-        except httpx.HTTPError as e:
-            logger.error(f"HTTP error during image download: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Unexpected error during image download: {e}")
             raise
 
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, Suspense, use, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useWorkflowPolling } from "@/hooks/useWorkflowPolling";
 import { resumeWorkflow, getProject, getCompany } from "@/lib/api";
@@ -12,19 +11,11 @@ import { OutlineReviewCard } from "@/components/workflow/OutlineReviewCard";
 import { FinalReviewTabs } from "@/components/workflow/FinalReviewTabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Home, Building2 } from "lucide-react";
 import { toast } from "sonner";
 
 function ProjectWorkflowContent({ projectId }: { projectId: number }) {
-  const router = useRouter();
   const { status, loading, error, refresh } = useWorkflowPolling(projectId);
   const [submitting, setSubmitting] = useState(false);
   const [project, setProject] = useState<Project | null>(null);

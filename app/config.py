@@ -17,7 +17,6 @@ class Settings(BaseSettings):
     # OpenRouter
     openrouter_api_key: str
     openrouter_text_model: str
-    openrouter_image_model: str
 
     # Google APIs (optional — Fact Check Tools, Rich Results Test)
     google_api_key: Optional[str] = None

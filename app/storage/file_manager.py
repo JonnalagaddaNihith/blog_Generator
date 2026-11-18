@@ -26,12 +26,12 @@ class FileManager:
         self.md_path.mkdir(parents=True, exist_ok=True)
         logger.info(f"Storage directories ensured: {self.images_path}, {self.pdfs_path}, {self.docx_path}, {self.txt_path}, {self.html_path}, {self.md_path}")
 
-    def save_image(self, image_data: bytes, prefix: str = "img") -> str:
+    def save_image(self, image_data: bytes, prefix: str = "img", image_format: str = "png") -> str:
         """
         Save image data to storage.
         Returns the relative path to the saved image.
         """
-        filename = f"{prefix}_{uuid.uuid4().hex}.png"
+        filename = f"{prefix}_{uuid.uuid4().hex}.{image_format}"
         filepath = self.images_path / filename
 
         try:

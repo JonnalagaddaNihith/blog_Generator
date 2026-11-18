@@ -66,7 +66,7 @@ async def export_pdf(
             output_path=pdf_path,
             title=title,
             content=blog.content or "",
-            author="Blog Generator",
+            author="Jonnalagadda Nihit",
             image_path=image_path,
             meta_description=meta_description,
         )
