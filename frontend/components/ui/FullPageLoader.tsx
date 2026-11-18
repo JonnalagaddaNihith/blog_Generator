@@ -8,7 +8,7 @@ export function FullPageLoader() {
       <div className="flex flex-col items-center gap-4 rounded-lg border bg-card p-8 shadow-lg">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
         <p className="text-sm text-muted-foreground">
-          This may take couple of minutes, Please don&apos;t leave the page
+          This may take couple of minutes, Please don&apos;t close the page
         </p>
       </div>
     </div>

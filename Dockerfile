@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Create storage directories
-RUN mkdir -p storage/images storage/pdfs
+RUN mkdir -p storage/images storage/pdfs storage/docx storage/txt storage/html storage/md
 
 # Expose port
 EXPOSE 8000

@@ -54,13 +54,18 @@ class LanguageToolService:
                 replacements = m.get("replacements", [])
                 suggestions = [r.get("value", "") for r in replacements[:3] if r.get("value")]
                 context = m.get("context", {})
+                context_text = context.get("text", "")
+                context_offset = context.get("offset", 0)
+                context_length = context.get("length", 0)
                 issues.append({
                     "message": m.get("message", ""),
                     "rule": m.get("rule", {}).get("id", ""),
                     "short_message": m.get("rule", {}).get("shortMessage", ""),
                     "offset": m.get("offset", 0),
                     "length": m.get("length", 0),
-                    "context": context.get("text", ""),
+                    "context": context_text,
+                    "context_offset": context_offset,
+                    "context_length": context_length,
                     "suggestions": suggestions,
                 })
 

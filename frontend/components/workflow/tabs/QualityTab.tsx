@@ -5,6 +5,7 @@ import { TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CopyButton } from "@/components/ui/CopyButton";
+import ReactMarkdown from "react-markdown";
 
 interface Props {
   qualityReport: WorkflowStatusResponse["quality_report"];
@@ -48,7 +49,9 @@ export function QualityTab({ qualityReport }: Props) {
           {qualityReport.overall_assessment && (
             <div>
               <h4 className="mb-2 text-sm font-semibold">Overall Assessment</h4>
-              <p className="text-sm leading-relaxed">{qualityReport.overall_assessment}</p>
+              <div className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none">
+                <ReactMarkdown>{qualityReport.overall_assessment}</ReactMarkdown>
+              </div>
             </div>
           )}
 
@@ -67,7 +70,9 @@ export function QualityTab({ qualityReport }: Props) {
                       </Badge>
                       {issue.location && <span className="text-sm font-medium">{issue.location}</span>}
                     </div>
-                    <p className="text-sm text-muted-foreground">{issue.suggestion}</p>
+                    <div className="text-sm text-muted-foreground prose prose-sm dark:prose-invert max-w-none">
+                      <ReactMarkdown>{issue.suggestion}</ReactMarkdown>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -85,12 +90,20 @@ export function QualityTab({ qualityReport }: Props) {
                   <div key={index} className="rounded-lg border p-3">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <Badge variant="outline">{issue.short_message || issue.rule || "Issue"}</Badge>
-                      {issue.offset !== undefined && (
-                        <span className="text-xs text-muted-foreground">offset {issue.offset}</span>
-                      )}
                     </div>
-                    <p className="text-sm">{issue.message}</p>
-                    {issue.context && (
+                    <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
+                      <ReactMarkdown>{issue.message}</ReactMarkdown>
+                    </div>
+                    {issue.context && issue.context_offset !== undefined && issue.context_length && issue.rule === "MORFOLOGIK_RULE_EN_US" ? (
+                      <div className="mt-2 rounded-md bg-muted p-2 text-sm">
+                        <span className="text-muted-foreground">Context: </span>
+                        {issue.context.slice(0, issue.context_offset)}
+                        <span className="rounded bg-yellow-200 px-1 font-semibold text-yellow-900 dark:bg-yellow-700 dark:text-yellow-100">
+                          {issue.context.slice(issue.context_offset, issue.context_offset + issue.context_length)}
+                        </span>
+                        {issue.context.slice(issue.context_offset + issue.context_length)}
+                      </div>
+                    ) : issue.context && (
                       <p className="mt-1 text-xs italic text-muted-foreground">{issue.context}</p>
                     )}
                     {issue.suggestions && issue.suggestions.length > 0 && (

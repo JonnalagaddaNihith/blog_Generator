@@ -1,6 +1,6 @@
 import pytest
 import os
-from app.services.pdf_generator import pdf_generator
+from app.services.file_generators.pdf_generator import pdf_generator
 
 
 @pytest.mark.asyncio

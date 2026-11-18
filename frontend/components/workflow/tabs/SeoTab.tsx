@@ -16,22 +16,31 @@ export function SeoTab({ seoMetadata }: Props) {
       <Card>
         <CardHeader>
           <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1">
-              <CardTitle className="flex items-center gap-2">
-                {seoMetadata.title || "SEO Title"}
-                {seoMetadata.title && <CopyButton value={seoMetadata.title} label="Title" />}
-              </CardTitle>
-              <p className="flex items-start gap-2 text-sm text-muted-foreground">
-                <span>{seoMetadata.meta_description || "No meta description available."}</span>
-                {seoMetadata.meta_description && <CopyButton value={seoMetadata.meta_description} label="Meta Description" />}
-              </p>
-            </div>
+            <CardTitle>SEO Metadata</CardTitle>
             <Badge variant={seoMetadata.rich_results?.valid ? "default" : "destructive"}>
               {seoMetadata.rich_results?.valid ? "Rich Results Valid" : "Rich Results Issues"}
             </Badge>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h4 className="text-sm font-semibold">Title</h4>
+              {seoMetadata.title && <CopyButton value={seoMetadata.title} label="Title" />}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {seoMetadata.title || "No title available."}
+            </p>
+          </div>
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h4 className="text-sm font-semibold">Meta Description</h4>
+              {seoMetadata.meta_description && <CopyButton value={seoMetadata.meta_description} label="Meta Description" />}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {seoMetadata.meta_description || "No meta description available."}
+            </p>
+          </div>
           <div>
             <div className="mb-2 flex items-center justify-between gap-2">
               <h4 className="text-sm font-semibold">Keyword Density (%)</h4>
@@ -60,13 +69,7 @@ export function SeoTab({ seoMetadata }: Props) {
                 <h4 className="text-sm font-semibold">Rich Results</h4>
                 <CopyButton value={JSON.stringify(seoMetadata.rich_results, null, 2)} label="Rich Results" />
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-md bg-muted/50 p-3">
-                  <div className="text-xs text-muted-foreground">Rich Results Status</div>
-                  <Badge variant={seoMetadata.rich_results.valid ? "default" : "destructive"} className="mt-1">
-                    {seoMetadata.rich_results.valid ? "Valid" : "Invalid"}
-                  </Badge>
-                </div>
+              <div className="grid gap-3 sm:grid-cols-3">
                 {seoMetadata.rich_results.schema_org && (
                   <div className="rounded-md bg-muted/50 p-3">
                     <div className="text-xs text-muted-foreground">Schema.org Status</div>

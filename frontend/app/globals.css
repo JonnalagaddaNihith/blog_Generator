@@ -294,3 +294,53 @@
 .prose.max-w-none {
   max-width: none;
 }
+
+/* Dark mode prose */
+.dark .prose {
+  color: var(--foreground);
+}
+
+.dark .prose h1,
+.dark .prose h2,
+.dark .prose h3 {
+  color: var(--foreground);
+}
+
+.dark .prose strong {
+  color: var(--foreground);
+}
+
+.dark .prose a {
+  color: var(--primary);
+}
+
+.dark .prose a:hover {
+  color: var(--primary-foreground);
+}
+
+.dark .prose code {
+  color: var(--foreground);
+  background-color: var(--muted);
+}
+
+.dark .prose pre {
+  background-color: var(--muted);
+  color: var(--foreground);
+}
+
+.dark .prose blockquote {
+  color: var(--muted-foreground);
+  border-left-color: var(--border);
+}
+
+.dark .prose thead {
+  border-bottom-color: var(--border);
+}
+
+.dark .prose tbody tr {
+  border-bottom-color: var(--border);
+}
+
+.dark .prose hr {
+  border-color: var(--border);
+}

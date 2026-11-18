@@ -43,8 +43,17 @@ alembic/versions/*.pyc
 # Storage
 storage/images/*
 storage/pdfs/*
+storage/docx/*
+storage/txt/*
+storage/html/*
+storage/md/*
+
 !storage/images/.gitkeep
 !storage/pdfs/.gitkeep
+!storage/docx/.gitkeep
+!storage/txt/.gitkeep
+!storage/html/.gitkeep
+!storage/md/.gitkeep
 
 # Logs
 *.log

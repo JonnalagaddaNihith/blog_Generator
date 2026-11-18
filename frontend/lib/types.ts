@@ -184,6 +184,8 @@ export interface WorkflowStatusResponse {
       offset?: number;
       length?: number;
       context?: string;
+      context_offset?: number;
+      context_length?: number;
       suggestions?: string[];
     }>;
   };

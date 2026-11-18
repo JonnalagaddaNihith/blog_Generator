@@ -215,3 +215,35 @@ export async function exportPdf(blogId: number): Promise<{ message: string; blog
   if (!res.ok) throw new Error("Failed to export PDF");
   return res.json();
 }
+
+export async function exportDocx(blogId: number): Promise<{ message: string; blog_id: number; docx_filename: string; download_url: string }> {
+  const res = await fetch(`${API_BASE}/blogs/${blogId}/export/docx`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error("Failed to export DOCX");
+  return res.json();
+}
+
+export async function exportTxt(blogId: number): Promise<{ message: string; blog_id: number; txt_filename: string; download_url: string }> {
+  const res = await fetch(`${API_BASE}/blogs/${blogId}/export/txt`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error("Failed to export TXT");
+  return res.json();
+}
+
+export async function exportHtml(blogId: number): Promise<{ message: string; blog_id: number; html_filename: string; download_url: string }> {
+  const res = await fetch(`${API_BASE}/blogs/${blogId}/export/html`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error("Failed to export HTML");
+  return res.json();
+}
+
+export async function exportMd(blogId: number): Promise<{ message: string; blog_id: number; md_filename: string; download_url: string }> {
+  const res = await fetch(`${API_BASE}/blogs/${blogId}/export/md`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error("Failed to export MD");
+  return res.json();
+}
