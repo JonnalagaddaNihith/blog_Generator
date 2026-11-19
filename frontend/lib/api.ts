@@ -130,7 +130,7 @@ export async function resumeWorkflow(
   payload: {
     action: "approve" | "reject" | "regenerate";
     updated_outline?: { strategy?: string; outline: OutlineSection[] };
-    regenerate_section?: "outline" | "blog_content" | "seo" | "image" | "verification" | "all";
+    regenerate_section?: "outline" | "blog_content" | "seo" | "image" | "verification" | "quality" | "all";
   }
 ): Promise<{ message: string; project_id: number; current_stage: string }> {
   const res = await fetch(`${API_BASE}/projects/${projectId}/workflow/approve`, {

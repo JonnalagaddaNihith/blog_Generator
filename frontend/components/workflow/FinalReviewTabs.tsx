@@ -16,7 +16,7 @@ interface Props {
   status: WorkflowStatusResponse;
   submitting: boolean;
   onApproveFinal: () => void;
-  onRegenerateSection: (section: "outline" | "seo" | "verification" | "all") => void;
+  onRegenerateSection: (section: "outline" | "seo" | "verification" | "quality" | "all") => void;
   onRefresh?: () => void;
   projectId: number;
 }
@@ -54,7 +54,15 @@ export function FinalReviewTabs({
           <Button
             variant="outline"
             size="sm"
-            disabled={submitting || is_complete}
+            disabled={submitting}
+            onClick={() => onRegenerateSection("outline")}
+          >
+            <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Regenerate Outline
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={submitting}
             onClick={() => onRegenerateSection("seo")}
           >
             <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Re-run SEO
@@ -62,7 +70,7 @@ export function FinalReviewTabs({
           <Button
             variant="outline"
             size="sm"
-            disabled={submitting || is_complete}
+            disabled={submitting}
             onClick={() => onRegenerateSection("verification")}
           >
             <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Re-run Fact-Check
@@ -70,7 +78,7 @@ export function FinalReviewTabs({
           <Button
             variant="outline"
             size="sm"
-            disabled={submitting || is_complete}
+            disabled={submitting}
             onClick={() => onRegenerateSection("all")}
           >
             <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Rewrite Article
@@ -183,7 +191,11 @@ export function FinalReviewTabs({
           onRefresh={onRefresh}
         />
         <SeoTab seoMetadata={seo_metadata} />
-        <QualityTab qualityReport={quality_report} />
+        <QualityTab
+          qualityReport={quality_report}
+          onFixQualityIssues={() => onRegenerateSection("quality")}
+          fixDisabled={submitting}
+        />
         <FactsTab factVerificationReport={fact_verification_report} />
       </Tabs>
     </div>

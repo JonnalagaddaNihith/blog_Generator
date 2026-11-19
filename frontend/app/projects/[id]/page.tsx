@@ -68,9 +68,15 @@ function ProjectWorkflowContent({ projectId }: { projectId: number }) {
       };
       if (payload.action === "regenerate") {
         const section = payload.regenerate_section || "all";
-        notify(
-          section === "all" ? "Article regenerated" : `${section.replace("_", " ")} regenerated`
-        );
+        const message =
+          section === "quality"
+            ? "Quality issues fixed — SEO, quality & fact-check re-ran"
+            : section === "outline"
+              ? "Outline regenerated — review and approve to continue"
+              : section === "all"
+                ? "Article regenerated"
+                : `${section.replace("_", " ")} regenerated`;
+        notify(message);
       }
       if (payload.action === "approve") {
         // Approving the outline runs the whole pipeline (writing, SEO,

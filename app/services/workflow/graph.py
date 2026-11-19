@@ -18,6 +18,7 @@ from app.services.workflow.nodes import (
     regenerate_image_node,
     regenerate_verification_node,
     regenerate_all_node,
+    regenerate_quality_node,
 )
 from app.utils.logger import logger
 
@@ -89,6 +90,7 @@ def build_workflow_graph(workflow: StateGraph, enable_image_generation: bool = F
     
     workflow.add_node("regenerate_all", regenerate_all_node)
     workflow.add_node("regenerate_verification", regenerate_verification_node)
+    workflow.add_node("regenerate_quality", regenerate_quality_node)
 
     # Stage 1: Research to Outline
     workflow.set_entry_point("web_research")
@@ -128,6 +130,7 @@ def build_workflow_graph(workflow: StateGraph, enable_image_generation: bool = F
         "regenerate_seo": "regenerate_seo",
         "regenerate_verification": "regenerate_verification",
         "regenerate_all": "regenerate_all",
+        "regenerate_quality": "regenerate_quality",
         "pending": END  # Wait for human approval
     }
     
@@ -153,6 +156,10 @@ def build_workflow_graph(workflow: StateGraph, enable_image_generation: bool = F
     # and fact verification so reports stay consistent (avoids re-running
     # blog_writing/seo/image a second time).
     workflow.add_edge("regenerate_all", "quality")
+    # regenerate_quality revises content for non-grammar quality issues and
+    # refreshes SEO inline; it rejoins at quality so the report, fact
+    # verification and final approval all re-run on the revised content.
+    workflow.add_edge("regenerate_quality", "quality")
 
     # Regenerate outline is reachable from both approval checkpoints and
     # always returns to the first approval gate: a new outline invalidates

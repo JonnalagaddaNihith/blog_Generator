@@ -78,7 +78,7 @@ class BlogGenerationWorkflowState(TypedDict):
     # Approval fields
     approval_status: Literal["pending", "approved", "rejected", "regenerate"]
     approval_stage: Literal["blog_strategy", "final_review", None]
-    regenerate_section: Literal["outline", "blog_content", "seo", "image", "verification", "all", None]
+    regenerate_section: Literal["outline", "blog_content", "seo", "image", "verification", "quality", "all", None]
     # When True, LLM calls skip the Redis response cache (set by regenerate nodes)
     bypass_llm_cache: bool
     # ID of the persisted BlogVersion row (set when workflow completes)
@@ -277,7 +277,7 @@ class BlogGenerationWorkflow:
             raise ValueError(f"action must be one of {valid_actions}")
         
         if action == "regenerate" and regenerate_section:
-            valid_sections = ["outline", "blog_content", "seo", "image", "verification", "all"]
+            valid_sections = ["outline", "blog_content", "seo", "image", "verification", "quality", "all"]
             if regenerate_section not in valid_sections:
                 raise ValueError(f"regenerate_section must be one of {valid_sections}")
 
@@ -299,7 +299,7 @@ class BlogGenerationWorkflow:
             project_id: Project ID
             action: "approve", "reject", "regenerate", or "retry_persistence"
             updated_outline: User-edited outline (optional)
-            regenerate_section: "outline", "blog_content", "seo", "image", "verification", or "all"
+            regenerate_section: "outline", "blog_content", "seo", "image", "verification", "quality", or "all"
             
         Returns:
             The workflow state after resuming
@@ -332,7 +332,7 @@ class BlogGenerationWorkflow:
             project_id: Project ID
             action: "approve", "reject", "regenerate", or "retry_persistence"
             updated_outline: User-edited outline (optional)
-            regenerate_section: "outline", "blog_content", "seo", "image", "verification", or "all"
+            regenerate_section: "outline", "blog_content", "seo", "image", "verification", "quality", or "all"
         """
         graph = await self.build_graph()
         thread_id = str(project_id)
@@ -364,8 +364,20 @@ class BlogGenerationWorkflow:
             update_dict["outline"] = updated_outline
             logger.info("Updated outline provided")
 
-        # Update the state in the graph
-        await graph.aupdate_state(config, update_dict)
+        # Update the state in the graph. When the thread already ran to
+        # completion (next is empty), a plain update leaves nothing to
+        # resume — attribute the update to fact_verification instead so the
+        # checkpoint rewinds to just before final_approval and the pending
+        # regenerate decision is re-evaluated by check_final_approval.
+        thread_complete = bool(current_state.values) and len(current_state.next) == 0
+        if action == "regenerate" and thread_complete:
+            logger.info("Workflow thread already completed; rewinding to final_approval for regeneration")
+            await graph.aupdate_state(config, update_dict, as_node="fact_verification")
+            rewound = await graph.aget_state(config)
+            if not rewound.next:
+                raise Exception("Failed to rewind completed workflow for regeneration")
+        else:
+            await graph.aupdate_state(config, update_dict)
 
         # Resume execution (pass None to continue from where it was interrupted)
         result = await graph.ainvoke(None, config)

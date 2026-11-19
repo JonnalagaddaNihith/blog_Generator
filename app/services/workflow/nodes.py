@@ -1,5 +1,7 @@
 """Node implementations for the blog generation workflow."""
 from typing import Dict, Any, Sequence
+import json
+from app.services.openrouter import openrouter_service
 from app.agents import (
     web_research_agent,
     keyword_intelligence_agent,
@@ -283,4 +285,68 @@ async def regenerate_all_node(state: WorkflowState) -> WorkflowState:
     else:
         logger.info("Image generation is disabled, skipping")
         state["image_details"] = {}
+    return state
+
+
+async def regenerate_quality_node(state: WorkflowState) -> WorkflowState:
+    """Fix non-grammar quality issues in the blog content, then refresh SEO.
+
+    Only issues flagged by the quality agent's LLM assessment count —
+    entries with type == "grammar" and the LanguageTool grammar_issues
+    list are intentionally excluded. The revised content then flows
+    through quality -> fact_verification -> final_approval; the image
+    node is skipped so image_details is left untouched.
+    """
+    logger.info("Regenerating content to fix quality issues")
+    state["current_stage"] = "regenerate_quality"
+    state["bypass_llm_cache"] = True
+
+    quality_report = state.get("quality_report") or {}
+    quality_issues = [
+        issue
+        for issue in quality_report.get("issues", [])
+        if issue.get("type") != "grammar"
+    ]
+
+    if quality_issues and state.get("blog_content"):
+        issues_json = json.dumps(quality_issues, indent=2)
+        prompt = f"""
+You are revising a blog post to fix specific quality issues.
+
+Blog Content:
+{state["blog_content"]}
+
+Quality Issues To Fix:
+{issues_json}
+
+Rules:
+- Fix ONLY the listed issues. Do not rewrite sections that have no issues.
+- Do NOT change grammar or spelling — grammar issues are handled separately.
+- Preserve the article's topic, arguments, facts, keywords, and markdown structure (headings, lists, links).
+- Keep the word count approximately the same.
+- Return ONLY the revised blog post in markdown. No commentary, no code fences.
+"""
+        revised_content, _ = await openrouter_service.generate_text(
+            prompt=prompt,
+            temperature=0.3,
+            multiplier=8,
+            use_cache=False,
+        )
+        if revised_content:
+            state["blog_content"] = revised_content.strip()
+            logger.info(f"Quality-fix revision applied: {len(revised_content)} characters")
+    else:
+        logger.info("No non-grammar quality issues found; skipping content revision")
+
+    # Refresh SEO metadata for the (possibly revised) content, mirroring
+    # regenerate_all_node. The image is intentionally not regenerated.
+    seo_result = await seo_agent.execute(
+        topic=state["topic"],
+        content=state["blog_content"],
+        keywords=state["keywords"],
+        use_cache=False,
+    )
+    state["seo_metadata"] = seo_result
+    state["approval_status"] = "pending"
+    state["approval_stage"] = "final_review"
     return state

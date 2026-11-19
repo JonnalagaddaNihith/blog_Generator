@@ -100,7 +100,7 @@ export function RichTextEditor({
   return (
     <div className="border rounded-md">
       {editable && (
-        <div className="flex flex-wrap items-center gap-1 border-b p-2 bg-muted/50">
+        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-1 border-b p-2 bg-muted">
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleBold().run()}
             isActive={editor.isActive("bold")}
@@ -168,7 +168,9 @@ export function RichTextEditor({
           </ToolbarButton>
         </div>
       )}
-      <EditorContent editor={editor} />
+      <div className="max-h-[70vh] overflow-y-auto">
+        <EditorContent editor={editor} />
+      </div>
     </div>
   );
 }

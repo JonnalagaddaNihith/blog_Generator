@@ -68,10 +68,10 @@ export function ArticleDraftTab({
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Article Draft</CardTitle>
+              <CardTitle className="text-2xl font-semibold">Article Draft</CardTitle>
               {!isComplete && !editingContent && (
                 <Button variant="outline" size="sm" onClick={handleStartEdit}>
-                  <Edit className="mr-2 h-4 w-4" /> Edit Content
+                  <Edit className="mr-2 h-4 w-4 text-primary hover:text-primary/80 transition-colors" /> Edit Content
                 </Button>
               )}
             </div>
