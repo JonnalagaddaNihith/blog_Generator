@@ -103,7 +103,21 @@ export function ArticleDraftTab({
               </div>
             ) : (
               <div className="prose prose-neutral dark:prose-invert max-w-none">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{blogContent}</ReactMarkdown>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    a: ({ node, ...props }) => (
+                      <a
+                        {...props}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 underline visited:text-blue-900 dark:text-blue-400 dark:visited:text-blue-300"
+                      />
+                    ),
+                  }}
+                >
+                  {blogContent}
+                </ReactMarkdown>
               </div>
             )}
           </CardContent>

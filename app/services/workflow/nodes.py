@@ -88,6 +88,7 @@ async def blog_writing_node(state: WorkflowState) -> WorkflowState:
         audience=state["audience"],
         target_word_count=state["target_word_count"],
         use_cache=not state.get("bypass_llm_cache", False),
+        research_results=list(state.get("research_results", [])),
     )
     state["blog_content"] = result.get("content", "")
     state["current_stage"] = "blog_writing"
@@ -259,6 +260,7 @@ async def regenerate_all_node(state: WorkflowState) -> WorkflowState:
         audience=state["audience"],
         target_word_count=state["target_word_count"],
         use_cache=False,
+        research_results=list(state.get("research_results", [])),
     )
     state["blog_content"] = result.get("content", "")
     # Regenerate SEO

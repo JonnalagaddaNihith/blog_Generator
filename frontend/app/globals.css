@@ -199,13 +199,17 @@
 }
 
 .prose a {
-  color: var(--primary);
+  color: #2563eb;
   text-decoration: underline;
   font-weight: 500;
 }
 
 .prose a:hover {
-  color: var(--primary-foreground);
+  color: #1d4ed8;
+}
+
+.prose a:visited {
+  color: #1e3a8a;
 }
 
 .prose code {
@@ -311,11 +315,15 @@
 }
 
 .dark .prose a {
-  color: var(--primary);
+  color: #60a5fa;
 }
 
 .dark .prose a:hover {
-  color: var(--primary-foreground);
+  color: #93c5fd;
+}
+
+.dark .prose a:visited {
+  color: #93c5fd;
 }
 
 .dark .prose code {

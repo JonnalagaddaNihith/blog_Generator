@@ -9,6 +9,17 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
+const mdComponents = {
+  a: ({ node, ...props }: any) => (
+    <a
+      {...props}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-blue-600 underline visited:text-blue-900 dark:text-blue-400 dark:visited:text-blue-300"
+    />
+  ),
+};
+
 interface Props {
   qualityReport: WorkflowStatusResponse["quality_report"];
   onFixQualityIssues?: () => void;
@@ -119,7 +130,7 @@ export function QualityTab({ qualityReport, onFixQualityIssues, fixDisabled }: P
             <div>
               <h4 className="mb-2 text-sm font-semibold">Overall Assessment</h4>
               <div className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none">
-                <ReactMarkdown>{qualityReport.overall_assessment}</ReactMarkdown>
+                <ReactMarkdown components={mdComponents}>{qualityReport.overall_assessment}</ReactMarkdown>
               </div>
             </div>
           )}
@@ -152,7 +163,7 @@ export function QualityTab({ qualityReport, onFixQualityIssues, fixDisabled }: P
                       {issue.location && <span className="text-sm font-medium">{issue.location}</span>}
                     </div>
                     <div className="text-sm text-muted-foreground prose prose-sm dark:prose-invert max-w-none">
-                      <ReactMarkdown>{issue.suggestion}</ReactMarkdown>
+                      <ReactMarkdown components={mdComponents}>{issue.suggestion}</ReactMarkdown>
                     </div>
                   </div>
                 ))}
@@ -173,7 +184,7 @@ export function QualityTab({ qualityReport, onFixQualityIssues, fixDisabled }: P
                       <Badge variant="outline">{issue.short_message || issue.rule || "Issue"}</Badge>
                     </div>
                     <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
-                      <ReactMarkdown>{issue.message}</ReactMarkdown>
+                      <ReactMarkdown components={mdComponents}>{issue.message}</ReactMarkdown>
                     </div>
                     {issue.context && issue.context_offset !== undefined && issue.context_length && issue.rule === "MORFOLOGIK_RULE_EN_US" ? (
                       <div className="mt-2 rounded-md bg-muted p-2 text-sm">

@@ -37,6 +37,7 @@ class Settings(BaseSettings):
 
     # Feature Flags
     enable_image_generation: bool = False
+    enable_backlinks: bool = True
 
     class Config:
         env_file = ".env"

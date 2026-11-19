@@ -2,7 +2,7 @@
 
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { marked } from "marked";
 import TurndownService from "turndown";
 import {
@@ -15,9 +15,11 @@ import {
   Heading3,
   Undo,
   Redo,
+  Link2,
 } from "lucide-react";
 import { Button } from "./button";
 import { Separator } from "./separator";
+import { Input } from "./input";
 
 interface RichTextEditorProps {
   content: string; // markdown content
@@ -34,6 +36,9 @@ export function RichTextEditor({
     headingStyle: "atx",
     codeBlockStyle: "fenced",
   });
+  const [linkPopoverOpen, setLinkPopoverOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
+  const linkPopoverRef = useRef<HTMLDivElement>(null);
 
   // Convert markdown to HTML for Tiptap
   const markdownToHtml = (markdown: string): string => {
@@ -46,7 +51,19 @@ export function RichTextEditor({
   };
 
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [
+      StarterKit.configure({
+        link: {
+          openOnClick: false,
+          autolink: true,
+          linkOnPaste: true,
+          HTMLAttributes: {
+            target: "_blank",
+            rel: "noopener noreferrer",
+          },
+        },
+      }),
+    ],
     content: markdownToHtml(content),
     editable,
     immediatelyRender: true,
@@ -69,6 +86,21 @@ export function RichTextEditor({
       editor.commands.setContent(markdownToHtml(content));
     }
   }, [content, editor]);
+
+  // Close the link popover when clicking outside it
+  useEffect(() => {
+    if (!linkPopoverOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        linkPopoverRef.current &&
+        !linkPopoverRef.current.contains(e.target as Node)
+      ) {
+        setLinkPopoverOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [linkPopoverOpen]);
 
   if (!editor) {
     return null;
@@ -96,6 +128,23 @@ export function RichTextEditor({
       {children}
     </Button>
   );
+
+  const openLinkPopover = () => {
+    const existing = editor.getAttributes("link").href as string | undefined;
+    setLinkUrl(existing || "");
+    setLinkPopoverOpen((open) => !open);
+  };
+
+  const applyLink = () => {
+    const url = linkUrl.trim();
+    if (!url) {
+      editor.chain().focus().unsetLink().run();
+    } else {
+      const href = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+      editor.chain().focus().setLink({ href }).run();
+    }
+    setLinkPopoverOpen(false);
+  };
 
   return (
     <div className="border rounded-md">
@@ -145,6 +194,49 @@ export function RichTextEditor({
           >
             <ListOrdered className="h-4 w-4" />
           </ToolbarButton>
+          <Separator orientation="vertical" className="h-6 mx-1" />
+          <div className="relative" ref={linkPopoverRef}>
+            <ToolbarButton
+              onClick={openLinkPopover}
+              isActive={editor.isActive("link")}
+            >
+              <Link2 className="h-4 w-4" />
+            </ToolbarButton>
+            {linkPopoverOpen && (
+              <div className="absolute left-0 top-10 z-20 flex w-72 items-center gap-2 rounded-md border bg-background p-2 shadow-md">
+                <Input
+                  type="url"
+                  placeholder="https://example.com"
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      applyLink();
+                    }
+                  }}
+                  className="h-8 text-sm"
+                  autoFocus
+                />
+                <Button size="sm" className="h-8" onClick={applyLink}>
+                  Apply
+                </Button>
+                {editor.isActive("link") && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8"
+                    onClick={() => {
+                      editor.chain().focus().unsetLink().run();
+                      setLinkPopoverOpen(false);
+                    }}
+                  >
+                    Remove
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
           <Separator orientation="vertical" className="h-6 mx-1" />
           <ToolbarButton
             onClick={() => {
