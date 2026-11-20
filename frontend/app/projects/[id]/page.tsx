@@ -176,6 +176,7 @@ function ProjectWorkflowContent({ projectId }: { projectId: number }) {
           }
           onRefresh={refresh}
           projectId={projectId}
+          company={company}
         />
       )}
     </div>

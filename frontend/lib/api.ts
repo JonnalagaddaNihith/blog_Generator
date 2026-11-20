@@ -54,6 +54,32 @@ export async function deleteCompany(companyId: number): Promise<{ message: strin
   return res.json();
 }
 
+// WordPress OAuth API
+export async function getWordPressOAuthUrl(companyId: number): Promise<{ authorization_url: string; state: string }> {
+  const res = await fetch(`${API_BASE}/companies/${companyId}/wordpress/oauth/url`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ detail: "Failed to get OAuth URL" }));
+    throw new Error(errorData.detail || "Failed to get OAuth URL");
+  }
+  return res.json();
+}
+
+export async function exchangeWordPressOAuthCode(companyId: number, code: string, state: string): Promise<{ message: string; token_type?: string; scope?: string }> {
+  const res = await fetch(`${API_BASE}/companies/${companyId}/wordpress/oauth/callback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, state }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ detail: "Failed to exchange OAuth code" }));
+    throw new Error(errorData.detail || "Failed to exchange OAuth code");
+  }
+  return res.json();
+}
+
 // Project API
 export async function createProject(data: ProjectCreate): Promise<Project> {
   const res = await fetch(`${API_BASE}/projects/`, {
@@ -245,5 +271,19 @@ export async function exportMd(blogId: number): Promise<{ message: string; blog_
     method: "POST",
   });
   if (!res.ok) throw new Error("Failed to export MD");
+  return res.json();
+}
+
+// WordPress Export API
+export async function exportWordPress(blogId: number, status: "draft" | "publish" = "draft"): Promise<{ status: string; post_id: number; url: string; message: string }> {
+  const res = await fetch(`${API_BASE}/blogs/${blogId}/export/wordpress`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ detail: "Failed to publish to WordPress" }));
+    throw new Error(errorData.detail || "Failed to publish to WordPress");
+  }
   return res.json();
 }

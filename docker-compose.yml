@@ -70,6 +70,7 @@ services:
       - QWEN_SPACE_ID=${QWEN_SPACE_ID}
       - HF_FALLBACK_MODEL=${HF_FALLBACK_MODEL}
       - IMAGE_BACKEND=${IMAGE_BACKEND}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
     volumes:
       - ./storage:/app/storage
       - ./alembic:/app/alembic

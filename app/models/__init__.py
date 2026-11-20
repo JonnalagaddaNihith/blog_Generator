@@ -11,6 +11,7 @@ from app.models.seo_metadata import SEOMetadata
 from app.models.quality_report import QualityReport
 from app.models.fact_verification_report import FactVerificationReport
 from app.models.approval import Approval
+from app.models.wordpress_publication import WordPressPublication
 
 __all__ = [
     "Base",
@@ -26,4 +27,5 @@ __all__ = [
     "QualityReport",
     "FactVerificationReport",
     "Approval",
+    "WordPressPublication",
 ]

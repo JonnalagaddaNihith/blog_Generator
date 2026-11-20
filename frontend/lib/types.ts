@@ -9,6 +9,8 @@ export interface Company {
   name: string;
   description?: string;
   website?: string;
+  wp_site?: string;
+  wp_configured?: boolean;
   created_at: string;
   updated_at?: string;
 }
@@ -17,12 +19,21 @@ export interface CompanyCreate {
   name: string;
   description?: string;
   website?: string;
+  wp_site?: string;
+  wp_client_id?: string;
+  wp_client_secret?: string;
+  wp_redirect_uri?: string;
 }
 
 export interface CompanyUpdate {
   name?: string;
   description?: string;
   website?: string;
+  wp_site?: string;
+  wp_client_id?: string;
+  wp_client_secret?: string;
+  wp_token?: string;
+  wp_redirect_uri?: string;
 }
 
 export interface Project {

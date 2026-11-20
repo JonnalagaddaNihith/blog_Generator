@@ -9,6 +9,8 @@ from app.services.file_generators import pdf_generator, docx_generator, txt_gene
 from app.storage.file_manager import file_manager
 from app.models.blog import BlogStatus
 from app.utils.logger import logger
+from app.site_connector.services import WordPressPublishService
+from app.site_connector.schemas import WordPressPublishRequest, WordPressPublishResponse
 import os
 
 router = APIRouter()
@@ -486,3 +488,37 @@ async def download_md(
         filename=filename,
         media_type="text/markdown",
     )
+
+# WordPress Export
+@router.post("/blogs/{blog_id}/export/wordpress", response_model=WordPressPublishResponse)
+async def export_wordpress(
+    blog_id: int,
+    publish_request: WordPressPublishRequest,
+    db: AsyncSession = Depends(get_current_db),
+):
+    """Export an approved blog to WordPress.com. Rejects if not approved."""
+    # Verify blog exists
+    result = await db.execute(select(BlogVersion).where(BlogVersion.id == blog_id))
+    blog = result.scalar_one_or_none()
+    if not blog:
+        raise HTTPException(status_code=404, detail="Blog version not found")
+
+    # Check if approved
+    if blog.status != BlogStatus.approved:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot export to WordPress: blog version is not approved"
+        )
+
+    try:
+        service = WordPressPublishService(db)
+        result = await service.publish_blog_to_wordpress(
+            blog_version_id=blog_id,
+            status=publish_request.status,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error publishing to WordPress: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to publish to WordPress: {str(e)}")

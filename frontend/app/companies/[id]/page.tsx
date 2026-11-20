@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, Suspense, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Company, Project, WorkflowStatusResponse, ProjectUpdate } from "@/lib/types";
+import { Company, CompanyUpdate, Project, WorkflowStatusResponse, ProjectUpdate } from "@/lib/types";
 import { getCompany, updateCompany, deleteCompany, getProjects, getWorkflowStatus, updateProject, deleteProject, createProjectAndStartWorkflow } from "@/lib/api";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -15,6 +15,7 @@ import { CompanyDetailCard, CompanyFormData } from "@/components/companies/Compa
 import { ProjectsListCard } from "@/components/companies/ProjectsListCard";
 import { ProjectEditDialog, ProjectEditFormData } from "@/components/companies/ProjectEditDialog";
 import { NewProjectDialog } from "@/components/companies/NewProjectDialog";
+import { WordPressSettingsDialog } from "@/components/companies/WordPressSettingsDialog";
 
 function CompanyDetailContent({ companyId }: { companyId: number }) {
   const router = useRouter();
@@ -39,6 +40,7 @@ function CompanyDetailContent({ companyId }: { companyId: number }) {
   const [savingProject, setSavingProject] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ kind: "project" | "company"; id: number; label: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [wordPressSettingsOpen, setWordPressSettingsOpen] = useState(false);
 
   const [formData, setFormData] = useState<CompanyFormData>({
     name: "",
@@ -201,11 +203,20 @@ function CompanyDetailContent({ companyId }: { companyId: number }) {
     setError(null);
 
     try {
-      const updated = await updateCompany(companyId, formData);
+      const updateData: CompanyUpdate = {
+        name: formData.name,
+        description: formData.description || undefined,
+        website: formData.website || undefined,
+      };
+
+      const updated = await updateCompany(companyId, updateData);
       setCompany(updated);
       setEditing(false);
+      setError(null); // Clear any previous errors
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update company");
+      console.error("Failed to update company:", err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to update company";
+      setError(errorMessage);
     } finally {
       setSaving(false);
     }
@@ -270,6 +281,7 @@ function CompanyDetailContent({ companyId }: { companyId: number }) {
         onFormChange={setFormData}
         onSubmit={handleUpdate}
         onDelete={handleDelete}
+        onWordPressSettings={() => setWordPressSettingsOpen(true)}
       />
 
       <ProjectsListCard
@@ -298,6 +310,13 @@ function CompanyDetailContent({ companyId }: { companyId: number }) {
         onOpenChange={setCreateDialogOpen}
         onFormChange={setCreateFormData}
         onSubmit={handleCreateProject}
+      />
+
+      <WordPressSettingsDialog
+        open={wordPressSettingsOpen}
+        onOpenChange={setWordPressSettingsOpen}
+        company={company}
+        onSuccess={loadCompany}
       />
 
       <ConfirmDialog

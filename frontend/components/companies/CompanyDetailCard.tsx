@@ -27,6 +27,7 @@ interface Props {
   onFormChange: (data: CompanyFormData) => void;
   onSubmit: (e: FormEvent) => void;
   onDelete: () => void;
+  onWordPressSettings?: () => void;
 }
 
 export function CompanyDetailCard({
@@ -40,6 +41,7 @@ export function CompanyDetailCard({
   onFormChange,
   onSubmit,
   onDelete,
+  onWordPressSettings,
 }: Props) {
   return (
     <Card>
@@ -56,6 +58,15 @@ export function CompanyDetailCard({
               <Button variant="outline" size="sm" onClick={onEdit}>
                 <Edit className="mr-2 h-4 w-4" /> Edit
               </Button>
+              {onWordPressSettings && (
+                <Button variant="outline" size="sm" onClick={onWordPressSettings}>
+                  <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 6v6l4 2" />
+                  </svg>
+                  WordPress
+                </Button>
+              )}
               <Button variant="outline" size="sm" onClick={onDelete}>
                 <Trash2 className="mr-2 h-4 w-4 text-destructive" /> Delete
               </Button>
@@ -135,6 +146,13 @@ export function CompanyDetailCard({
               <div>
                 <Label className="text-muted-foreground">Description</Label>
                 <p className="mt-1 text-sm">{company.description}</p>
+              </div>
+            )}
+
+            {company.wp_configured && (
+              <div>
+                <Label className="text-muted-foreground">WordPress.com</Label>
+                <p className="mt-1 text-sm text-green-600">✓ Configured{company.wp_site ? ` - ${company.wp_site}` : ""}</p>
               </div>
             )}
 
