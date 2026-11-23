@@ -79,6 +79,12 @@ async def approve_workflow(
                 detail="Workflow has not been started for this project. Please start the workflow first."
             )
 
+        if request.action == "regenerate" and status.get("is_complete"):
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot regenerate workflow: blog has already been approved"
+            )
+
         # For retry_persistence, check if there's content to persist
         if request.action == "retry_persistence":
             if not status.get("blog_content"):

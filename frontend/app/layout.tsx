@@ -32,7 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               AI Blog Generator
             </Link>
             <nav className="flex gap-4">
-              <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
+              <Link href="/projects" className="text-sm text-muted-foreground hover:text-foreground">
                 New Project
               </Link>
               <Link href="/companies" className="text-sm text-muted-foreground hover:text-foreground">

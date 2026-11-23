@@ -23,6 +23,9 @@ interface Props {
   company?: Company | null;
 }
 
+type ExportResult = { download_url: string; [key: string]: unknown };
+type ExportFn = (id: number) => Promise<ExportResult>;
+
 export function FinalReviewTabs({
   status,
   submitting,
@@ -34,16 +37,40 @@ export function FinalReviewTabs({
 }: Props) {
   const { seo_metadata, quality_report, fact_verification_report, blog_content, is_complete, blog_version_id, image_details, image_generation_enabled } = status;
   const [exporting, setExporting] = useState<{ [key: string]: boolean }>({});
-  const [downloadUrls, setDownloadUrls] = useState<{ [key: string]: string | null }>({});
   const [publishingWordPress, setPublishingWordPress] = useState(false);
+  const apiBase = process.env.NEXT_PUBLIC_API_URL;
+  const regenerationDisabled = submitting || is_complete;
 
-  const handleExport = async (format: string, exportFn: (id: number) => Promise<any>) => {
+  const triggerFileDownload = async (url: string, filename: string) => {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Download failed with status ${response.status}`);
+    }
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  };
+
+  const handleExport = async (format: string, exportFn: ExportFn) => {
     setExporting(prev => ({ ...prev, [format]: true }));
     try {
       const result = await exportFn(blog_version_id);
-      setDownloadUrls(prev => ({ ...prev, [format]: new URL(result.download_url, apiBase).toString() }));
+      const filenameValue = result[`${format}_filename`];
+      const filename = typeof filenameValue === "string" ? filenameValue : `${format}`;
+      const url = new URL(result.download_url, apiBase).toString();
+      await triggerFileDownload(url, filename);
+      toast.success(`${format.toUpperCase()} downloaded`);
     } catch (err) {
       console.error(`Failed to export ${format.toUpperCase()}:`, err);
+      toast.error(`Failed to export ${format.toUpperCase()}`, {
+        description: err instanceof Error ? err.message : "Unknown error",
+      });
     } finally {
       setExporting(prev => ({ ...prev, [format]: false }));
     }
@@ -85,8 +112,6 @@ export function FinalReviewTabs({
     }
   };
 
-  const apiBase = process.env.NEXT_PUBLIC_API_URL;
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-4">
@@ -94,7 +119,7 @@ export function FinalReviewTabs({
           <Button
             variant="outline"
             size="sm"
-            disabled={submitting}
+            disabled={regenerationDisabled}
             onClick={() => onRegenerateSection("outline")}
           >
             <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Regenerate Outline
@@ -102,7 +127,7 @@ export function FinalReviewTabs({
           <Button
             variant="outline"
             size="sm"
-            disabled={submitting}
+            disabled={regenerationDisabled}
             onClick={() => onRegenerateSection("seo")}
           >
             <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Re-run SEO
@@ -110,7 +135,7 @@ export function FinalReviewTabs({
           <Button
             variant="outline"
             size="sm"
-            disabled={submitting}
+            disabled={regenerationDisabled}
             onClick={() => onRegenerateSection("verification")}
           >
             <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Re-run Fact-Check
@@ -118,7 +143,7 @@ export function FinalReviewTabs({
           <Button
             variant="outline"
             size="sm"
-            disabled={submitting}
+            disabled={regenerationDisabled}
             onClick={() => onRegenerateSection("all")}
           >
             <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Rewrite Article
@@ -135,76 +160,24 @@ export function FinalReviewTabs({
             <DropdownMenuContent align="end" className="w-56">
               {/* File Export Section */}
               <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Download as File</div>
-              {downloadUrls['pdf'] ? (
-                <DropdownMenuItem asChild>
-                  <a href={downloadUrls['pdf']} target="_blank" rel="noreferrer" className="flex items-center">
-                    <FileText className="mr-2 h-4 w-4" /> PDF
-                  </a>
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem onClick={() => handleExport('pdf', exportPdf)} disabled={exporting['pdf']}>
+              {[
+                { format: 'pdf', label: 'PDF', icon: <FileText className="mr-2 h-4 w-4" />, exportFn: exportPdf },
+                { format: 'docx', label: 'DOCX', icon: <FileText className="mr-2 h-4 w-4" />, exportFn: exportDocx },
+                { format: 'txt', label: 'TXT', icon: <FileCode className="mr-2 h-4 w-4" />, exportFn: exportTxt },
+                { format: 'html', label: 'HTML', icon: <Globe className="mr-2 h-4 w-4" />, exportFn: exportHtml },
+                { format: 'md', label: 'Markdown', icon: <FileCode className="mr-2 h-4 w-4" />, exportFn: exportMd },
+              ].map(({ format, label, icon, exportFn }) => (
+                <DropdownMenuItem
+                  key={format}
+                  onClick={() => handleExport(format, exportFn)}
+                  disabled={exporting[format]}
+                >
                   <span className="flex items-center">
-                    {exporting['pdf'] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
-                    {exporting['pdf'] ? 'Generating PDF...' : 'PDF'}
+                    {exporting[format] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : icon}
+                    {exporting[format] ? `Generating ${label}...` : label}
                   </span>
                 </DropdownMenuItem>
-              )}
-              {downloadUrls['docx'] ? (
-                <DropdownMenuItem asChild>
-                  <a href={downloadUrls['docx']} target="_blank" rel="noreferrer" className="flex items-center">
-                    <FileText className="mr-2 h-4 w-4" /> DOCX
-                  </a>
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem onClick={() => handleExport('docx', exportDocx)} disabled={exporting['docx']}>
-                  <span className="flex items-center">
-                    {exporting['docx'] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
-                    {exporting['docx'] ? 'Generating DOCX...' : 'DOCX'}
-                  </span>
-                </DropdownMenuItem>
-              )}
-              {downloadUrls['txt'] ? (
-                <DropdownMenuItem asChild>
-                  <a href={downloadUrls['txt']} target="_blank" rel="noreferrer" className="flex items-center">
-                    <FileCode className="mr-2 h-4 w-4" /> TXT
-                  </a>
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem onClick={() => handleExport('txt', exportTxt)} disabled={exporting['txt']}>
-                  <span className="flex items-center">
-                    {exporting['txt'] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileCode className="mr-2 h-4 w-4" />}
-                    {exporting['txt'] ? 'Generating TXT...' : 'TXT'}
-                  </span>
-                </DropdownMenuItem>
-              )}
-              {downloadUrls['html'] ? (
-                <DropdownMenuItem asChild>
-                  <a href={downloadUrls['html']} target="_blank" rel="noreferrer" className="flex items-center">
-                    <Globe className="mr-2 h-4 w-4" /> HTML
-                  </a>
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem onClick={() => handleExport('html', exportHtml)} disabled={exporting['html']}>
-                  <span className="flex items-center">
-                    {exporting['html'] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Globe className="mr-2 h-4 w-4" />}
-                    {exporting['html'] ? 'Generating HTML...' : 'HTML'}
-                  </span>
-                </DropdownMenuItem>
-              )}
-              {downloadUrls['md'] ? (
-                <DropdownMenuItem asChild>
-                  <a href={downloadUrls['md']} target="_blank" rel="noreferrer" className="flex items-center">
-                    <FileCode className="mr-2 h-4 w-4" /> Markdown
-                  </a>
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem onClick={() => handleExport('md', exportMd)} disabled={exporting['md']}>
-                  <span className="flex items-center">
-                    {exporting['md'] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileCode className="mr-2 h-4 w-4" />}
-                    {exporting['md'] ? 'Generating MD...' : 'Markdown'}
-                  </span>
-                </DropdownMenuItem>
-              )}
+              ))}
 
               <DropdownMenuSeparator />
 
@@ -263,7 +236,7 @@ export function FinalReviewTabs({
         <QualityTab
           qualityReport={quality_report}
           onFixQualityIssues={() => onRegenerateSection("quality")}
-          fixDisabled={submitting}
+          fixDisabled={regenerationDisabled}
         />
         <FactsTab factVerificationReport={fact_verification_report} />
       </Tabs>

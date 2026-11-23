@@ -163,7 +163,7 @@ async def export_docx(
             output_path=docx_path,
             title=title,
             content=blog.content or "",
-            author="Blog Generator",
+            author="Jonnalagadda Nihit",
             image_path=image_path,
             meta_description=meta_description,
         )
@@ -258,7 +258,7 @@ async def export_txt(
             output_path=txt_path,
             title=title,
             content=blog.content or "",
-            author="Blog Generator",
+            author="Jonnalagadda Nihit",
             image_path=image_path,
             meta_description=meta_description,
         )
@@ -353,7 +353,7 @@ async def export_html(
             output_path=html_path,
             title=title,
             content=blog.content or "",
-            author="Blog Generator",
+            author="Jonnalagadda Nihit",
             image_path=image_path,
             meta_description=meta_description,
         )
@@ -448,7 +448,7 @@ async def export_md(
             output_path=md_path,
             title=title,
             content=blog.content or "",
-            author="Blog Generator",
+            author="Jonnalagadda Nihit",
             image_path=image_path,
             meta_description=meta_description,
         )

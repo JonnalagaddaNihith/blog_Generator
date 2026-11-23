@@ -64,3 +64,47 @@ async def test_retry_persistence_without_content(client: AsyncClient):
     )
     assert response.status_code == 400
     assert "No blog content available" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_regenerate_completed_workflow_rejected(client: AsyncClient, monkeypatch):
+    """Test that regeneration is rejected after the workflow is complete."""
+    from unittest.mock import AsyncMock
+    from app.services.langgraph_workflow import blog_generation_workflow
+
+    company_response = await client.post(
+        "/api/v1/companies/",
+        json={"name": "Test Company", "description": "A test company"}
+    )
+    company_id = company_response.json()["id"]
+
+    project_response = await client.post(
+        "/api/v1/projects/",
+        json={
+            "company_id": company_id,
+            "topic": "AI in Healthcare",
+            "target_word_count": 1500
+        }
+    )
+    project_id = project_response.json()["id"]
+
+    monkeypatch.setattr(
+        blog_generation_workflow,
+        "get_workflow_status",
+        AsyncMock(return_value={
+            "current_stage": "final_approval",
+            "is_complete": True,
+            "blog_content": "Approved blog content",
+        }),
+    )
+    resume_workflow = AsyncMock()
+    monkeypatch.setattr(blog_generation_workflow, "resume_workflow", resume_workflow)
+
+    response = await client.post(
+        f"/api/v1/projects/{project_id}/workflow/approve",
+        json={"action": "regenerate", "regenerate_section": "seo"},
+    )
+
+    assert response.status_code == 400
+    assert "already been approved" in response.json()["detail"]
+    resume_workflow.assert_not_called()

@@ -65,6 +65,7 @@ htmlcov/
 
 # Readme
 README.md
+*.md
 
 # OS
 .DS_Store

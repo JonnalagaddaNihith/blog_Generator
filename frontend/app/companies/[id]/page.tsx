@@ -4,17 +4,14 @@ import { useState, useEffect, useCallback, Suspense, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Company, CompanyUpdate, Project, WorkflowStatusResponse, ProjectUpdate } from "@/lib/types";
-import { getCompany, updateCompany, deleteCompany, getProjects, getWorkflowStatus, updateProject, deleteProject, createProjectAndStartWorkflow } from "@/lib/api";
+import { getCompany, updateCompany, deleteCompany, getProjects, getWorkflowStatus, updateProject, deleteProject } from "@/lib/api";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Breadcrumb,BreadcrumbItem,BreadcrumbLink,BreadcrumbList,BreadcrumbPage,BreadcrumbSeparator} from "@/components/ui/breadcrumb";
 import { Home, Loader2, Building2 } from "lucide-react";
-import { FullPageLoader } from "@/components/ui/FullPageLoader";
-import { ProjectFormData } from "@/components/projects/ProjectFormFields";
 import { CompanyDetailCard, CompanyFormData } from "@/components/companies/CompanyDetailCard";
 import { ProjectsListCard } from "@/components/companies/ProjectsListCard";
 import { ProjectEditDialog, ProjectEditFormData } from "@/components/companies/ProjectEditDialog";
-import { NewProjectDialog } from "@/components/companies/NewProjectDialog";
 import { WordPressSettingsDialog } from "@/components/companies/WordPressSettingsDialog";
 
 function CompanyDetailContent({ companyId }: { companyId: number }) {
@@ -29,14 +26,6 @@ function CompanyDetailContent({ companyId }: { companyId: number }) {
   const [saving, setSaving] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [createFormData, setCreateFormData] = useState<ProjectFormData>({
-    topic: "",
-    target_word_count: 500,
-    audience: "",
-    tone: "",
-  });
   const [savingProject, setSavingProject] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ kind: "project" | "company"; id: number; label: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -97,31 +86,6 @@ function CompanyDetailContent({ companyId }: { companyId: number }) {
     loadCompany();
     loadProjects();
   }, [loadCompany, loadProjects]);
-
-  const handleCreateProject = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!company || !createFormData.topic.trim()) {
-      setError("Please enter a blog topic.");
-      return;
-    }
-
-    setCreating(true);
-    setError(null);
-    try {
-      const project = await createProjectAndStartWorkflow({
-        company_id: company.id,
-        topic: createFormData.topic,
-        target_word_count: createFormData.target_word_count,
-        audience: createFormData.audience || undefined,
-        tone: createFormData.tone || undefined,
-      });
-      setCreateDialogOpen(false);
-      router.push(`/projects/${project.id}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create project");
-      setCreating(false);
-    }
-  };
 
   const handleEditProject = (project: Project) => {
     setEditingProject(project);
@@ -244,7 +208,6 @@ function CompanyDetailContent({ companyId }: { companyId: number }) {
 
   return (
     <div className="container mx-auto max-w-4xl space-y-6 py-8">
-      {creating && <FullPageLoader />}
       <Breadcrumb className="mb-4">
         <BreadcrumbList>
           <BreadcrumbItem>
@@ -287,7 +250,7 @@ function CompanyDetailContent({ companyId }: { companyId: number }) {
       <ProjectsListCard
         projects={projects}
         workflowStatuses={workflowStatuses}
-        onNewProject={() => setCreateDialogOpen(true)}
+        onNewProject={() => router.push(`/projects?company_id=${companyId}`)}
         onEditProject={handleEditProject}
         onDeleteProject={handleDeleteProject}
       />
@@ -300,16 +263,6 @@ function CompanyDetailContent({ companyId }: { companyId: number }) {
         onOpenChange={setProjectDialogOpen}
         onFormChange={setProjectFormData}
         onSubmit={handleUpdateProject}
-      />
-
-      <NewProjectDialog
-        open={createDialogOpen}
-        companyName={company.name}
-        formData={createFormData}
-        creating={creating}
-        onOpenChange={setCreateDialogOpen}
-        onFormChange={setCreateFormData}
-        onSubmit={handleCreateProject}
       />
 
       <WordPressSettingsDialog
