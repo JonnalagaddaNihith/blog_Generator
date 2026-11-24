@@ -40,7 +40,7 @@ class CompetitorGapAgent:
             context = "\n".join(context_parts)
 
             # Calculate char limit first
-            char_limit = openrouter_service._calculate_char_limit(
+            char_limit = openrouter_service.calculate_char_limit(
                 f"Based on the following research results for the topic \"{topic}\", analyze competitor content:\n\nResearch Context:\n{context}",
                 multiplier=8
             )

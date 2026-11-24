@@ -14,19 +14,12 @@ class Settings(BaseSettings):
 
     # SearXNG
     searxng_url: str
-    searxng_base_url: Optional[str] = None
 
     # OpenRouter
     openrouter_api_key: str
     openrouter_text_model: str
 
-    # Hugging Face (for image generation)
-    hf_token: Optional[str] = None
-    qwen_space_id: Optional[str] = None
-    hf_fallback_model: Optional[str] = None
-    image_backend: Optional[str] = None
-
-    # Google APIs (optional — Fact Check Tools, Rich Results Test)
+    # Google APIs (optional — Fact Check Tools)
     google_api_key: Optional[str] = None
 
     # LangGraph

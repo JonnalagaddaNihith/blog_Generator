@@ -50,7 +50,7 @@ class SEOAgent:
             secondary_keywords = keywords.get("secondary_keywords", [])
 
             # Calculate char limit first
-            char_limit = openrouter_service._calculate_char_limit(
+            char_limit = openrouter_service.calculate_char_limit(
                 f"Optimize the following blog content for SEO:\n\nTopic: {topic}\n\nPrimary Keywords: {', '.join(primary_keywords)}\nSecondary Keywords: {', '.join(secondary_keywords[:10])}\n\nBlog Content (first 2000 characters):\n{content[:2000]}",
                 multiplier=3
             )

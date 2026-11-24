@@ -44,7 +44,7 @@ class KeywordIntelligenceAgent:
             suggestions_context = "\n".join(f"- {s}" for s in google_suggestions) or "(none)"
 
             # Calculate char limit first
-            char_limit = openrouter_service._calculate_char_limit(
+            char_limit = openrouter_service.calculate_char_limit(
                 f"Based on the following research results for the topic \"{topic}\", extract keywords:\n\nResearch Context:\n{context}",
                 multiplier=2
             )

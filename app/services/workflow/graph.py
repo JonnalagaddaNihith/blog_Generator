@@ -1,5 +1,4 @@
 # """Graph building and routing logic for the blog generation workflow."""
-from typing import Dict, Any
 from langgraph.graph import StateGraph, END
 from app.services.workflow.nodes import (
     web_research_node,
@@ -19,13 +18,9 @@ from app.services.workflow.nodes import (
     regenerate_verification_node,
     regenerate_all_node,
     regenerate_quality_node,
+    WorkflowState,
 )
 from app.utils.logger import logger
-
-
-class WorkflowState(Dict[str, Any]):
-    """Type alias for workflow state dictionary."""
-    pass
 
 
 def check_blog_strategy_approval(state: WorkflowState) -> str:

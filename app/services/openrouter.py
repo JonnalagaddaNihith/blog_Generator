@@ -44,7 +44,7 @@ class OpenRouterService:
         logger.info(f"Dynamic max_tokens calculated: {calculated_max} (prompt tokens: {prompt_tokens}, multiplier: {multiplier})")
         return calculated_max
 
-    def _calculate_char_limit(self, prompt: str, multiplier: int = 3) -> int:
+    def calculate_char_limit(self, prompt: str, multiplier: int = 3) -> int:
         """
         Calculate dynamic character limit based on prompt length and multiplier.
         """
@@ -71,7 +71,7 @@ class OpenRouterService:
         """
         # Calculate dynamic max_tokens and char limit
         dynamic_max = self._calculate_max_tokens(prompt, max_tokens, multiplier)
-        char_limit = self._calculate_char_limit(prompt, multiplier)
+        char_limit = self.calculate_char_limit(prompt, multiplier)
 
         cache_key = f"text:{model or self.text_model}:{hash(prompt)}:{dynamic_max}:{temperature}"
         if use_cache:

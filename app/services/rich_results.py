@@ -2,7 +2,6 @@ import httpx
 import json
 import textstat
 from typing import Dict, Any, List, Optional
-from app.config import settings
 from app.utils.logger import logger
 from app.utils.markdown import markdown_to_plain_text
 
@@ -29,11 +28,9 @@ class RichResultsService:
     Two modes:
     - build_article_jsonld(): deterministic Article schema from SEO output
     - validate_jsonld(): local schema.org sanity checks (no network needed)
-    - test_url(): Google Rich Results Test API — only works on live URLs
-      and requires GOOGLE_API_KEY with the Search Console API enabled.
+    - validate_with_schema_org(): remote schema.org validation endpoint.
     """
 
-    RICH_RESULTS_URL = "https://searchconsole.googleapis.com/v1/urlTestingTools/richResultsTest:run"
     SCHEMA_ORG_VALIDATOR_URL = "https://validator.schema.org/validate"
 
     def __init__(self, timeout: float = 30.0):
@@ -166,37 +163,5 @@ class RichResultsService:
         except Exception as e:
             logger.warning(f"schema.org validator failed: {e}")
             return {"success": False, "error": str(e)}
-
-    async def test_url(self, url: str, user_agent: str = "MOBILE") -> Dict[str, Any]:
-        """
-        Run Google's Rich Results Test API against a LIVE URL.
-        Requires GOOGLE_API_KEY with Search Console API enabled.
-        Does not work for unpublished/generated content.
-        """
-        if not settings.google_api_key:
-            return {"success": False, "error": "GOOGLE_API_KEY not configured"}
-
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    self.RICH_RESULTS_URL,
-                    params={"key": settings.google_api_key},
-                    json={"url": url, "userAgent": user_agent},
-                )
-                response.raise_for_status()
-                data = response.json()
-
-            results = []
-            for r in data.get("testResultsPerRichResultType", []):
-                results.append({
-                    "type": r.get("richResultType", ""),
-                    "status": r.get("richResultStatus", ""),
-                })
-            return {"success": True, "url": url, "results": results}
-
-        except Exception as e:
-            logger.warning(f"Rich Results Test API failed for {url}: {e}")
-            return {"success": False, "url": url, "error": str(e)}
-
 
 rich_results_service = RichResultsService()

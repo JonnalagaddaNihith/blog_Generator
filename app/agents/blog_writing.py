@@ -67,7 +67,7 @@ class BlogWritingAgent:
                 )
 
             # Calculate char limit first
-            char_limit = openrouter_service._calculate_char_limit(
+            char_limit = openrouter_service.calculate_char_limit(
                 f"Write a complete blog post based on the following outline:\n\nTopic: {topic}\nTone: {tone}\nTarget Audience: {audience}\nTotal Target Word Count: {target_word_count}\n\nPrimary Keywords to include: {', '.join(primary_keywords)}\nSecondary Keywords to include: {', '.join(secondary_keywords[:10])}\n\nOutline:\n{outline_text}" + (f"\n\nLinkable sources:\n{link_sources_text}" if link_sources_text else ""),
                 multiplier=8
             )

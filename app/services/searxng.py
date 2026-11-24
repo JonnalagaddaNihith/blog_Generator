@@ -100,37 +100,6 @@ class SearXNGService:
             logger.error(f"Unexpected error during SearXNG search: {e}")
             raise
 
-    async def extract_content(self, url: str) -> Optional[str]:
-        """
-        Extract main content from a URL using SearXNG's extract endpoint.
-        """
-        cache_key = f"extract:{url}"
-        cached = await cache_get(cache_key)
-        if cached:
-            logger.info(f"Cache hit for URL extraction: {url}")
-            return cached
-
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(
-                    f"{self.base_url}/extract",
-                    params={"url": url},
-                    headers=self.headers,
-                )
-                response.raise_for_status()
-                data = response.json()
-                content = data.get("content", "")
-
-                await cache_set(cache_key, content, expire_seconds=86400)
-                logger.info(f"Successfully extracted content from URL: {url}")
-                return content
-
-        except httpx.HTTPError as e:
-            logger.error(f"HTTP error during content extraction: {e}")
-            return None
-        except Exception as e:
-            logger.error(f"Unexpected error during content extraction: {e}")
-            return None
 
 
 searxng_service = SearXNGService()

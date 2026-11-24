@@ -31,7 +31,7 @@ class BlogStrategyAgent:
             opportunities = competitor_analysis.get("opportunities", [])
 
             # Calculate char limit first
-            char_limit = openrouter_service._calculate_char_limit(
+            char_limit = openrouter_service.calculate_char_limit(
                 f"Generate a blog strategy and structured outline for the following:\n\nTopic: {topic}\nTarget Word Count: {target_word_count}\nTarget Audience: {audience}\nTone: {tone}\n\nPrimary Keywords: {', '.join(primary_keywords)}\n\nCompetitor Gaps: {', '.join(gaps[:5])}\nOpportunities: {', '.join(opportunities[:5])}",
                 multiplier=4
             )

@@ -47,18 +47,6 @@ async def cache_set(key: str, value: Any, expire_seconds: int = 1800) -> bool:
         return False
 
 
-async def cache_delete(key: str) -> bool:
-    client = await get_redis()
-    if client is None:
-        return False
-    try:
-        await client.delete(key)
-        return True
-    except Exception as e:
-        print(f"Warning: Redis delete failed: {e}")
-        return False
-
-
 async def close_redis():
     global redis_client
     if redis_client:

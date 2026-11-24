@@ -36,7 +36,7 @@ class QualityAgent:
             logger.info("Starting quality validation")
 
             # Calculate char limit first
-            char_limit = openrouter_service._calculate_char_limit(
+            char_limit = openrouter_service.calculate_char_limit(
                 f"Analyze the following blog content for quality:\n\nBlog Content:\n{content}",
                 multiplier=3
             )

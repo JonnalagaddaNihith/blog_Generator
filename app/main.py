@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.v1 import companies, projects, research, outlines, blogs, approvals, workflow, export
+from app.api.v1 import companies, projects, workflow, export
 from app.utils.logger import logger
 from app.cache import close_redis
 
@@ -36,10 +36,6 @@ app.add_middleware(
 # Include routers
 app.include_router(companies.router, prefix="/api/v1/companies", tags=["companies"])
 app.include_router(projects.router, prefix="/api/v1/projects", tags=["projects"])
-app.include_router(research.router, prefix="/api/v1", tags=["research"])
-app.include_router(outlines.router, prefix="/api/v1", tags=["outlines"])
-app.include_router(blogs.router, prefix="/api/v1", tags=["blogs"])
-app.include_router(approvals.router, prefix="/api/v1", tags=["approvals"])
 app.include_router(workflow.router, prefix="/api/v1", tags=["workflow"])
 app.include_router(export.router, prefix="/api/v1", tags=["export"])
 

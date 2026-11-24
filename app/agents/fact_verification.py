@@ -153,7 +153,7 @@ Return ONLY a JSON object:
             ]
 
             # Calculate char limit first
-            char_limit = openrouter_service._calculate_char_limit(
+            char_limit = openrouter_service.calculate_char_limit(
                 f"Verify factual claims in the following blog content against the provided research sources:\n\nBlog Content:\n{content}\n\nResearch Sources:\n{research_context}",
                 multiplier=3
             )
