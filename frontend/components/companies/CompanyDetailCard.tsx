@@ -5,16 +5,11 @@ import { Company } from "@/lib/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Edit, Loader2, Trash2 } from "lucide-react";
+import { CompanyFormFields, type CompanyFormData } from "./CompanyFormFields";
 
-export interface CompanyFormData {
-  name: string;
-  description: string;
-  website: string;
-}
+export type { CompanyFormData };
 
 interface Props {
   company: Company;
@@ -83,36 +78,7 @@ export function CompanyDetailCard({
 
         {editing ? (
           <form onSubmit={onSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Company Name *</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => onFormChange({ ...formData, name: e.target.value })}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="website">Website</Label>
-              <Input
-                id="website"
-                placeholder="https://yourcompany.com"
-                value={formData.website}
-                onChange={(e) => onFormChange({ ...formData, website: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                placeholder="Brief description of your company..."
-                rows={4}
-                value={formData.description}
-                onChange={(e) => onFormChange({ ...formData, description: e.target.value })}
-              />
-            </div>
+            <CompanyFormFields value={formData} onChange={onFormChange} />
 
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={onCancelEdit} disabled={saving}>

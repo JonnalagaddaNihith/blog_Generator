@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ interface Props {
   companyId: number;
   companyName: string;
   onSuccess: () => void;
+  autoStart?: boolean;
 }
 
 export function WordPressOAuthDialog({
@@ -23,6 +24,7 @@ export function WordPressOAuthDialog({
   companyId,
   companyName,
   onSuccess,
+  autoStart = false,
 }: Props) {
   const [step, setStep] = useState<"init" | "authorize" | "callback" | "success">("init");
   const [authUrl, setAuthUrl] = useState<string>("");
@@ -31,7 +33,7 @@ export function WordPressOAuthDialog({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleStartOAuth = async () => {
+  const handleStartOAuth = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -46,7 +48,15 @@ export function WordPressOAuthDialog({
     } finally {
       setLoading(false);
     }
-  };
+  }, [companyId]);
+
+  useEffect(() => {
+    if (open && autoStart) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentionally kick off OAuth when the dialog opens
+      handleStartOAuth();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only auto-start when the dialog opens
+  }, [open, autoStart]);
 
   const extractCodeFromUrl = (input: string): string | null => {
     try {
@@ -63,7 +73,7 @@ export function WordPressOAuthDialog({
     try {
       const text = await navigator.clipboard.readText();
       setRedirectInput(text);
-    } catch (err) {
+    } catch {
       setError("Failed to read from clipboard. Please paste manually.");
     }
   };
@@ -165,13 +175,13 @@ export function WordPressOAuthDialog({
               <div className="rounded-lg border bg-muted p-4">
                 <p className="text-sm font-medium mb-2">Step 2: Paste Redirect URL</p>
                 <p className="text-sm text-muted-foreground mb-3">
-                  After authorizing, you'll be redirected to a URL like:
+                  After authorizing, you&apos;ll be redirected to a URL like:
                   <br />
                   <code className="text-xs bg-background px-1 py-0.5 rounded">
                     http://127.0.0.1:8765/callback?code=abc123&state=xyz
                   </code>
                   <br />
-                  Copy the <strong>entire URL</strong> from your browser's address bar and paste it below.
+                  Copy the <strong>entire URL</strong> from your browser&apos;s address bar and paste it below.
                 </p>
                 <div className="space-y-2">
                   <div className="flex gap-2">

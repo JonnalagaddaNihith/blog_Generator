@@ -142,7 +142,7 @@ export default function HomePage() {
 
       {/* Features */}
       <section className="mt-20">
-        <h2 className="text-2xl font-bold tracking-tight text-center">What's included</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-center">What&apos;s included</h2>
         <p className="mt-2 text-center text-muted-foreground">
           A guided pipeline that keeps you in control at every stage.
         </p>
@@ -165,7 +165,7 @@ export default function HomePage() {
       <section className="mt-20 rounded-xl border bg-muted/40 p-8 text-center">
         <h2 className="text-xl font-bold">Ready to write your next post?</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Create a company profile if you haven't yet, then start your first project.
+          Create a company profile if you haven&apos;t yet, then start your first project.
         </p>
         <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Button asChild>

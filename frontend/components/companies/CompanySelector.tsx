@@ -1,16 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Company } from "@/lib/types";
-import { getCompanies, createCompany } from "@/lib/api";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { getCompanies } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Building2, Plus, Loader2 } from "lucide-react";
+import { CreateCompanyDialog } from "./CreateCompanyDialog";
 
 interface Props {
   onSelect: (company: Company) => void;
@@ -20,15 +17,8 @@ interface Props {
 export function CompanySelector({ onSelect, selectedCompanyId }: Props) {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [newCompany, setNewCompany] = useState({ name: "", description: "", website: "" });
 
-  useEffect(() => {
-    loadCompanies();
-  }, []);
-
-  const loadCompanies = async () => {
+  const loadCompanies = useCallback(async () => {
     try {
       setLoading(true);
       const data = await getCompanies();
@@ -38,24 +28,16 @@ export function CompanySelector({ onSelect, selectedCompanyId }: Props) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleCreateCompany = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCompany.name.trim()) return;
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data fetch on mount
+    loadCompanies();
+  }, [loadCompanies]);
 
-    setCreating(true);
-    try {
-      const created = await createCompany(newCompany);
-      setCompanies((prev) => [...prev, created]);
-      setNewCompany({ name: "", description: "", website: "" });
-      setShowCreateDialog(false);
-      onSelect(created);
-    } catch (err) {
-      console.error("Failed to create company:", err);
-    } finally {
-      setCreating(false);
-    }
+  const handleCreated = (company: Company) => {
+    setCompanies((prev) => [...prev, company]);
+    onSelect(company);
   };
 
   if (loading) {
@@ -75,57 +57,14 @@ export function CompanySelector({ onSelect, selectedCompanyId }: Props) {
           <Building2 className="h-12 w-12 text-muted-foreground mb-4" />
           <h3 className="text-lg font-semibold mb-2">No Companies Yet</h3>
           <p className="text-sm text-muted-foreground mb-4">Create your first company to get started</p>
-          <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-            <DialogTrigger asChild>
+          <CreateCompanyDialog
+            trigger={
               <Button>
                 <Plus className="mr-2 h-4 w-4" /> Create Company
               </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create New Company</DialogTitle>
-                <DialogDescription>Add your company to manage blog projects</DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleCreateCompany} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Company Name *</Label>
-                  <Input
-                    id="name"
-                    value={newCompany.name}
-                    onChange={(e) => setNewCompany({ ...newCompany, name: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="website">Website</Label>
-                  <Input
-                    id="website"
-                    placeholder="https://yourcompany.com"
-                    value={newCompany.website}
-                    onChange={(e) => setNewCompany({ ...newCompany, website: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    placeholder="Brief description of your company..."
-                    rows={3}
-                    value={newCompany.description}
-                    onChange={(e) => setNewCompany({ ...newCompany, description: e.target.value })}
-                  />
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => setShowCreateDialog(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={creating}>
-                    {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Create"}
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+            }
+            onCreated={handleCreated}
+          />
         </CardContent>
       </Card>
     );
@@ -135,57 +74,14 @@ export function CompanySelector({ onSelect, selectedCompanyId }: Props) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">Select a Company</h3>
-        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-          <DialogTrigger asChild>
+        <CreateCompanyDialog
+          trigger={
             <Button size="sm">
               <Plus className="mr-2 h-4 w-4" /> New Company
             </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create New Company</DialogTitle>
-              <DialogDescription>Add your company to manage blog projects</DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleCreateCompany} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Company Name *</Label>
-                <Input
-                  id="name"
-                  value={newCompany.name}
-                  onChange={(e) => setNewCompany({ ...newCompany, name: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="website">Website</Label>
-                <Input
-                  id="website"
-                  placeholder="https://yourcompany.com"
-                  value={newCompany.website}
-                  onChange={(e) => setNewCompany({ ...newCompany, website: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  placeholder="Brief description of your company..."
-                  rows={3}
-                  value={newCompany.description}
-                  onChange={(e) => setNewCompany({ ...newCompany, description: e.target.value })}
-                />
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setShowCreateDialog(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={creating}>
-                  {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Create"}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+          }
+          onCreated={handleCreated}
+        />
       </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {companies.map((company) => (

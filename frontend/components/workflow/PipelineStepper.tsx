@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckCircle2, Circle, Loader2, PauseCircle, ImageOff } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 const STAGES: { id: string; label: string; disabled?: boolean }[] = [
   { id: "web_research", label: "Web Research" },

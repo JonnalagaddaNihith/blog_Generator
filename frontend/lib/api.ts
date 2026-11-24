@@ -7,8 +7,6 @@ import {
   Project,
   ProjectCreate,
   ProjectUpdate,
-  BlogVersion,
-  BlogVersionUpdate,
 } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL;
@@ -171,39 +169,7 @@ export async function resumeWorkflow(
   return res.json();
 }
 
-export async function updateWorkflowOutline(projectId: number, updatedOutline: Record<string, unknown>): Promise<{ message: string; project_id: number }> {
-  const res = await fetch(`${API_BASE}/projects/${projectId}/workflow/outline`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(updatedOutline),
-  });
-  if (!res.ok) throw new Error("Failed to update outline");
-  return res.json();
-}
-
-// Blog API
-export async function getBlogs(projectId: number): Promise<BlogVersion[]> {
-  const res = await fetch(`${API_BASE}/projects/${projectId}/blogs`);
-  if (!res.ok) throw new Error("Failed to fetch blogs");
-  return res.json();
-}
-
-export async function getBlog(blogId: number): Promise<BlogVersion> {
-  const res = await fetch(`${API_BASE}/blogs/${blogId}`);
-  if (!res.ok) throw new Error("Failed to fetch blog");
-  return res.json();
-}
-
-export async function updateBlog(blogId: number, data: BlogVersionUpdate): Promise<BlogVersion> {
-  const res = await fetch(`${API_BASE}/blogs/${blogId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) throw new Error("Failed to update blog");
-  return res.json();
-}
-
+// Blog content API
 export async function updateWorkflowBlogContent(projectId: number, content: string): Promise<{ message: string; project_id: number }> {
   const res = await fetch(`${API_BASE}/projects/${projectId}/workflow/blog_content`, {
     method: "PUT",
@@ -214,22 +180,6 @@ export async function updateWorkflowBlogContent(projectId: number, content: stri
     const errorData = await res.json().catch(() => ({ detail: "Failed to update blog content" }));
     throw new Error(errorData.detail || "Failed to update blog content");
   }
-  return res.json();
-}
-
-export async function approveBlog(blogId: number): Promise<BlogVersion> {
-  const res = await fetch(`${API_BASE}/blogs/${blogId}/approve`, {
-    method: "POST",
-  });
-  if (!res.ok) throw new Error("Failed to approve blog");
-  return res.json();
-}
-
-export async function rejectBlog(blogId: number): Promise<BlogVersion> {
-  const res = await fetch(`${API_BASE}/blogs/${blogId}/reject`, {
-    method: "POST",
-  });
-  if (!res.ok) throw new Error("Failed to reject blog");
   return res.json();
 }
 
