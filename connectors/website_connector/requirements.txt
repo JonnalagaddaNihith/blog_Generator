@@ -1,0 +1,16 @@
+# Customer-side publishing connector dependencies.
+# Install with:  pip install -r requirements.txt
+fastapi>=0.115,<1
+uvicorn[standard]>=0.32,<1
+pydantic>=2.9,<3
+pydantic-settings>=2.6,<3
+SQLAlchemy>=2.0,<3
+
+# Database drivers — install ONLY the ones you need:
+# PyMySQL (pure Python; works for MySQL AND MariaDB)
+PyMySQL>=1.1,<2
+# psycopg 3 (PostgreSQL)
+psycopg[binary]>=3.2,<4
+# pymssql (SQL Server)
+pymssql>=2.3,<3
+# SQLite needs no extra driver (stdlib sqlite3)

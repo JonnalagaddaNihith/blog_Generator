@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.v1 import companies, projects, workflow, export
+from app.api.v1 import companies, projects, workflow, export, sql_websites
 from app.utils.logger import logger
 from app.cache import close_redis
 
@@ -38,6 +38,7 @@ app.include_router(companies.router, prefix="/api/v1/companies", tags=["companie
 app.include_router(projects.router, prefix="/api/v1/projects", tags=["projects"])
 app.include_router(workflow.router, prefix="/api/v1", tags=["workflow"])
 app.include_router(export.router, prefix="/api/v1", tags=["export"])
+app.include_router(sql_websites.router, prefix="/api/v1", tags=["sql-websites"])
 
 
 @app.get("/")

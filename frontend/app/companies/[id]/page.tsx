@@ -13,6 +13,7 @@ import { CompanyDetailCard, CompanyFormData } from "@/components/companies/Compa
 import { ProjectsListCard } from "@/components/companies/ProjectsListCard";
 import { ProjectEditDialog, ProjectEditFormData } from "@/components/companies/ProjectEditDialog";
 import { WordPressSettingsDialog } from "@/components/companies/WordPressSettingsDialog";
+import { SqlWebsitesDialog } from "@/components/companies/SqlWebsitesDialog";
 
 function CompanyDetailContent({ companyId }: { companyId: number }) {
   const router = useRouter();
@@ -30,6 +31,7 @@ function CompanyDetailContent({ companyId }: { companyId: number }) {
   const [deleteTarget, setDeleteTarget] = useState<{ kind: "project" | "company"; id: number; label: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [wordPressSettingsOpen, setWordPressSettingsOpen] = useState(false);
+  const [sqlWebsitesOpen, setSqlWebsitesOpen] = useState(false);
 
   const [formData, setFormData] = useState<CompanyFormData>({
     name: "",
@@ -245,6 +247,7 @@ function CompanyDetailContent({ companyId }: { companyId: number }) {
         onSubmit={handleUpdate}
         onDelete={handleDelete}
         onWordPressSettings={() => setWordPressSettingsOpen(true)}
+        onSqlWebsites={() => setSqlWebsitesOpen(true)}
       />
 
       <ProjectsListCard
@@ -270,6 +273,12 @@ function CompanyDetailContent({ companyId }: { companyId: number }) {
         onOpenChange={setWordPressSettingsOpen}
         company={company}
         onSuccess={loadCompany}
+      />
+
+      <SqlWebsitesDialog
+        open={sqlWebsitesOpen}
+        onOpenChange={setSqlWebsitesOpen}
+        company={company}
       />
 
       <ConfirmDialog

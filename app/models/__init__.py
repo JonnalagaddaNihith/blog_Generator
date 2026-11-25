@@ -12,6 +12,7 @@ from app.models.quality_report import QualityReport
 from app.models.fact_verification_report import FactVerificationReport
 from app.models.approval import Approval
 from app.models.wordpress_publication import WordPressPublication
+from app.models.sql_website import SqlWebsite, SqlPublication, SqlDatabaseType, SqlWebsiteStatus, SqlPublicationStatus
 
 __all__ = [
     "Base",
@@ -28,4 +29,9 @@ __all__ = [
     "FactVerificationReport",
     "Approval",
     "WordPressPublication",
+    "SqlWebsite",
+    "SqlPublication",
+    "SqlDatabaseType",
+    "SqlWebsiteStatus",
+    "SqlPublicationStatus",
 ]

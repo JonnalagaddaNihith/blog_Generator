@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { WorkflowStatusResponse, Company } from "@/lib/types";
-import { exportPdf, exportDocx, exportTxt, exportHtml, exportMd, exportWordPress } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { WorkflowStatusResponse, Company, SqlWebsite } from "@/lib/types";
+import { exportPdf, exportDocx, exportTxt, exportHtml, exportMd, exportWordPress, getSqlWebsites, exportBlogToSql } from "@/lib/api";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -38,8 +38,25 @@ export function FinalReviewTabs({
   const { seo_metadata, quality_report, fact_verification_report, blog_content, is_complete, blog_version_id, image_details, image_generation_enabled } = status;
   const [exporting, setExporting] = useState<{ [key: string]: boolean }>({});
   const [publishingWordPress, setPublishingWordPress] = useState(false);
+  const [sqlWebsites, setSqlWebsites] = useState<SqlWebsite[]>([]);
+  const [publishingSql, setPublishingSql] = useState<string | null>(null);
   const apiBase = process.env.NEXT_PUBLIC_API_URL;
   const regenerationDisabled = submitting || is_complete;
+
+  useEffect(() => {
+    if (!company?.id || !is_complete) return;
+    let cancelled = false;
+    getSqlWebsites(company.id)
+      .then((websites) => {
+        if (!cancelled) setSqlWebsites(websites);
+      })
+      .catch(() => {
+        if (!cancelled) setSqlWebsites([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [company?.id, is_complete]);
 
   const triggerFileDownload = async (url: string, filename: string) => {
     const response = await fetch(url);
@@ -109,6 +126,44 @@ export function FinalReviewTabs({
       });
     } finally {
       setPublishingWordPress(false);
+    }
+  };
+
+  const sqlWebsiteReady = (w: SqlWebsite) =>
+    w.status === "connected" && !!w.table_name && !!w.column_mapping && Object.keys(w.column_mapping).length > 0;
+
+  const handlePublishSql = async (website: SqlWebsite, status: "draft" | "publish") => {
+    if (!sqlWebsiteReady(website)) {
+      toast.error(`"${website.name}" is not ready to publish`, {
+        description: "Connect and configure a table mapping for this website first.",
+        action: company ? {
+          label: "Open Settings",
+          onClick: () => window.location.href = `/companies/${company.id}`,
+        } : undefined,
+      });
+      return;
+    }
+
+    const key = `${website.id}:${status}`;
+    setPublishingSql(key);
+    try {
+      const result = await exportBlogToSql(website.id, blog_version_id, status);
+      toast.success(`Published to ${website.name} as ${status}`, {
+        description: result.message || result.url,
+        action: result.url ? {
+          label: "View Post",
+          onClick: () => window.open(result.url, "_blank"),
+        } : undefined,
+        duration: 10000,
+      });
+    } catch (err) {
+      console.error(`Failed to publish to ${website.name}:`, err);
+      toast.error("SQL website publishing failed", {
+        description: err instanceof Error ? err.message : "Unknown error",
+        duration: 8000,
+      });
+    } finally {
+      setPublishingSql(null);
     }
   };
 
@@ -205,6 +260,31 @@ export function FinalReviewTabs({
                   {!company?.wp_configured && <span className="ml-2 text-xs text-muted-foreground">(Not configured)</span>}
                 </span>
               </DropdownMenuItem>
+
+              {/* Custom SQL Websites Section */}
+              {sqlWebsites.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Publish to Custom Website (SQL)</div>
+                  {sqlWebsites.map((w) => {
+                    const ready = sqlWebsiteReady(w);
+                    return (
+                      <DropdownMenuItem
+                        key={w.id}
+                        onClick={() => handlePublishSql(w, "draft")}
+                        disabled={!ready || publishingSql !== null}
+                        className={!ready ? "opacity-60 cursor-not-allowed" : ""}
+                      >
+                        <span className="flex items-center">
+                          {publishingSql === `${w.id}:draft` ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
+                          <span className="truncate max-w-[140px]">{w.name}</span>
+                          {!ready && <span className="ml-2 text-xs text-muted-foreground">(not configured)</span>}
+                        </span>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (

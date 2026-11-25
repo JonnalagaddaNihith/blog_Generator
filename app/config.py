@@ -43,5 +43,12 @@ class Settings(BaseSettings):
     # WordPress Encryption
     encryption_key: Optional[str] = None
 
+    # Custom SQL connector
+    # Public base URL of this API used to build absolute image URLs for
+    # remote websites (e.g. https://api.example.com). Optional.
+    public_api_url: Optional[str] = None
+    # Allow connector URLs pointing at private/loopback addresses (dev only)
+    sql_connector_allow_private: bool = True
+
 
 settings = Settings()

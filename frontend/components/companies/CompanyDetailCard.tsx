@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Edit, Loader2, Trash2 } from "lucide-react";
+import { Database, Edit, Loader2, Trash2 } from "lucide-react";
 import { CompanyFormFields, type CompanyFormData } from "./CompanyFormFields";
 
 export type { CompanyFormData };
@@ -23,6 +23,7 @@ interface Props {
   onSubmit: (e: FormEvent) => void;
   onDelete: () => void;
   onWordPressSettings?: () => void;
+  onSqlWebsites?: () => void;
 }
 
 export function CompanyDetailCard({
@@ -37,6 +38,7 @@ export function CompanyDetailCard({
   onSubmit,
   onDelete,
   onWordPressSettings,
+  onSqlWebsites,
 }: Props) {
   return (
     <Card>
@@ -60,6 +62,12 @@ export function CompanyDetailCard({
                     <path d="M12 6v6l4 2" />
                   </svg>
                   WordPress
+                </Button>
+              )}
+              {onSqlWebsites && (
+                <Button variant="outline" size="sm" onClick={onSqlWebsites}>
+                  <Database className="mr-2 h-4 w-4" />
+                  SQL Sites
                 </Button>
               )}
               <Button variant="outline" size="sm" onClick={onDelete}>

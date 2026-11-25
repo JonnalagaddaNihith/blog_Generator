@@ -21,6 +21,8 @@ wheels/
 
 # Virtual Environment
 .blog_generator/
+.venv/
+.connector/
 
 # Environment
 .env

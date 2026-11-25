@@ -142,3 +142,92 @@ export interface WorkflowStatusResponse {
   image_generation_enabled: boolean;
   blog_version_id: number;
 }
+// Custom SQL Website integration
+export type SqlDatabaseType = "mysql" | "postgresql" | "mariadb" | "sqlite" | "mssql";
+
+export interface SqlColumnMapping {
+  [blogField: string]: string;
+}
+
+export interface SqlWebsite {
+  id: number;
+  company_id: number;
+  name: string;
+  website_url?: string;
+  database_type: SqlDatabaseType;
+  connector_url: string;
+  table_name?: string;
+  column_mapping?: SqlColumnMapping;
+  status: "untested" | "connected" | "error";
+  last_tested_at?: string;
+  last_test_message?: string;
+  created_at: string;
+  updated_at?: string;
+  has_api_token?: boolean;
+}
+
+export interface SqlWebsiteCreate {
+  company_id: number;
+  name: string;
+  website_url?: string;
+  database_type: SqlDatabaseType;
+  connector_url: string;
+  api_token: string;
+  table_name?: string;
+  column_mapping?: SqlColumnMapping;
+  test_connection?: boolean;
+}
+
+export interface SqlWebsiteUpdate {
+  name?: string;
+  website_url?: string;
+  database_type?: SqlDatabaseType;
+  connector_url?: string;
+  api_token?: string;
+  table_name?: string;
+  column_mapping?: SqlColumnMapping;
+}
+
+export interface SqlWebsiteTestResult {
+  success: boolean;
+  message: string;
+  database_type?: string;
+  connector_version?: string;
+  tables?: string[];
+}
+
+export interface SqlColumnInfo {
+  name: string;
+  type?: string;
+  nullable?: boolean;
+}
+
+export interface SqlTableInfo {
+  name: string;
+  columns: SqlColumnInfo[];
+}
+
+export interface SqlSchema {
+  tables: SqlTableInfo[];
+}
+
+export interface SqlPublishResult {
+  status: string;
+  action?: string;
+  external_id?: string;
+  url?: string;
+  message?: string;
+}
+
+export interface SqlPublication {
+  id: number;
+  blog_version_id: number;
+  sql_website_id: number;
+  website_name?: string;
+  source_revision: number;
+  external_id?: string;
+  external_url?: string;
+  status: string;
+  published_at?: string;
+  created_at: string;
+}

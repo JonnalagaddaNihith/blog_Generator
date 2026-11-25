@@ -40,7 +40,8 @@ services:
       - ./searxng:/etc/searxng
     environment:
       - SEARXNG_BASE_URL=${SEARXNG_BASE_URL}
-    restart: unless-stopped
+    restart: "no"
+    stop_grace_period: 10s
 
   app:
     build:

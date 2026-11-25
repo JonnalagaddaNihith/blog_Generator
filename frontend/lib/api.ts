@@ -1,5 +1,12 @@
 import {
   WorkflowStatusResponse,
+  SqlWebsite,
+  SqlWebsiteCreate,
+  SqlWebsiteUpdate,
+  SqlWebsiteTestResult,
+  SqlSchema,
+  SqlPublishResult,
+  SqlPublication,
   OutlineSection,
   Company,
   CompanyCreate,
@@ -234,6 +241,94 @@ export async function exportWordPress(blogId: number, status: "draft" | "publish
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ detail: "Failed to publish to WordPress" }));
     throw new Error(errorData.detail || "Failed to publish to WordPress");
+  }
+  return res.json();
+}
+// Custom SQL Website API
+export async function getSqlWebsites(companyId: number): Promise<SqlWebsite[]> {
+  const res = await fetch(`${API_BASE}/companies/${companyId}/sql-websites`);
+  if (!res.ok) throw new Error("Failed to fetch SQL websites");
+  return res.json();
+}
+
+export async function getSqlWebsite(websiteId: number): Promise<SqlWebsite> {
+  const res = await fetch(`${API_BASE}/sql-websites/${websiteId}`);
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ detail: "Failed to fetch SQL website" }));
+    throw new Error(errorData.detail || "Failed to fetch SQL website");
+  }
+  return res.json();
+}
+
+export async function createSqlWebsite(data: SqlWebsiteCreate): Promise<SqlWebsite> {
+  const res = await fetch(`${API_BASE}/companies/${data.company_id}/sql-websites`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ detail: "Failed to create SQL website" }));
+    throw new Error(errorData.detail || "Failed to create SQL website");
+  }
+  return res.json();
+}
+
+export async function updateSqlWebsite(websiteId: number, data: SqlWebsiteUpdate): Promise<SqlWebsite> {
+  const res = await fetch(`${API_BASE}/sql-websites/${websiteId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ detail: "Failed to update SQL website" }));
+    throw new Error(errorData.detail || "Failed to update SQL website");
+  }
+  return res.json();
+}
+
+export async function deleteSqlWebsite(websiteId: number): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE}/sql-websites/${websiteId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error("Failed to delete SQL website");
+  return res.json();
+}
+
+export async function testSqlWebsite(websiteId: number): Promise<SqlWebsiteTestResult> {
+  const res = await fetch(`${API_BASE}/sql-websites/${websiteId}/test`, {
+    method: "POST",
+  });
+  const data = await res.json().catch(() => ({ detail: "Connection test failed" }));
+  if (!res.ok) {
+    throw new Error(data.detail || "Connection test failed");
+  }
+  return data;
+}
+
+export async function getSqlWebsiteSchema(websiteId: number): Promise<SqlSchema> {
+  const res = await fetch(`${API_BASE}/sql-websites/${websiteId}/schema`);
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ detail: "Failed to load schema" }));
+    throw new Error(errorData.detail || "Failed to load schema");
+  }
+  return res.json();
+}
+
+export async function getSqlPublications(blogId: number): Promise<SqlPublication[]> {
+  const res = await fetch(`${API_BASE}/blogs/${blogId}/sql-publications`);
+  if (!res.ok) throw new Error("Failed to fetch SQL publications");
+  return res.json();
+}
+
+export async function exportBlogToSql(websiteId: number, blogId: number, status: "draft" | "publish" = "draft"): Promise<SqlPublishResult> {
+  const res = await fetch(`${API_BASE}/blogs/${blogId}/export/sql/${websiteId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({ detail: "Failed to publish to SQL website" }));
+    throw new Error(errorData.detail || "Failed to publish to SQL website");
   }
   return res.json();
 }
