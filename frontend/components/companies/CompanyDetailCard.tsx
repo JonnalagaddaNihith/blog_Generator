@@ -130,6 +130,15 @@ export function CompanyDetailCard({
               </div>
             )}
 
+            {company.sql_configured && (
+              <div>
+                <Label className="text-muted-foreground">Custom Website (SQL)</Label>
+                <p className="mt-1 text-sm text-green-600">
+                  ✓ Configured{company.sql_websites_count ? ` - ${company.sql_websites_count} site${company.sql_websites_count === 1 ? "" : "s"}` : ""}
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4 pt-4 border-t">
               <div>
                 <Label className="text-muted-foreground">Created</Label>

@@ -11,6 +11,8 @@ export interface Company {
   website?: string;
   wp_site?: string;
   wp_configured?: boolean;
+  sql_configured?: boolean;
+  sql_websites_count?: number;
   created_at: string;
   updated_at?: string;
 }

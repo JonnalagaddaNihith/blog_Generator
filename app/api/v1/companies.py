@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from typing import List
 from app.api.dependencies import get_current_db
 from app.schemas import CompanyCreate, CompanyUpdate, CompanyResponse
-from app.models import Company, Project
+from app.models import Company, Project, SqlWebsite
 from app.services.langgraph_workflow import blog_generation_workflow
 from app.services.project_cleanup import delete_project_artifacts
 from app.site_connector.encryption import encrypt, decrypt
@@ -12,6 +12,17 @@ from app.site_connector.oauth import get_authorization_url, exchange_code_for_to
 from app.site_connector.schemas import WordPressOAuthUrlResponse, WordPressOAuthCallbackRequest
 
 router = APIRouter()
+
+
+async def _set_sql_flags(db: AsyncSession, company: Company, response: CompanyResponse) -> None:
+    """Populate SQL website flags on a company response."""
+    count = (
+        await db.execute(
+            select(func.count(SqlWebsite.id)).where(SqlWebsite.company_id == company.id)
+        )
+    ).scalar_one()
+    response.sql_websites_count = count
+    response.sql_configured = count > 0
 
 
 @router.post("/", response_model=CompanyResponse)
@@ -62,6 +73,7 @@ async def get_company(
     # Note: wp_token is optional and obtained through OAuth flow separately
     response = CompanyResponse.model_validate(company)
     response.wp_configured = bool(company.wp_site and company.wp_client_id and company.wp_client_secret)
+    await _set_sql_flags(db, company, response)
     return response
 
 
@@ -97,6 +109,7 @@ async def update_company(
     # Note: wp_token is optional and obtained through OAuth flow separately
     response = CompanyResponse.model_validate(company)
     response.wp_configured = bool(company.wp_site and company.wp_client_id and company.wp_client_secret)
+    await _set_sql_flags(db, company, response)
     return response
 
 

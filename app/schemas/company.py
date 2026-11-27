@@ -36,5 +36,7 @@ class CompanyResponse(CompanyBase):
     # WordPress site only - sensitive credentials are not exposed
     wp_site: Optional[str] = None
     wp_configured: bool = Field(default=False, description="Whether WordPress credentials are configured")
+    sql_configured: bool = Field(default=False, description="Whether at least one SQL website connection exists")
+    sql_websites_count: int = Field(default=0, description="Number of SQL website connections")
 
     model_config = ConfigDict(from_attributes=True)
