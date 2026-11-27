@@ -2,7 +2,7 @@
 
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { marked } from "marked";
 import TurndownService from "turndown";
 import {
@@ -27,15 +27,40 @@ interface RichTextEditorProps {
   editable?: boolean;
 }
 
+function ToolbarButton({
+  onClick,
+  isActive,
+  disabled,
+  children,
+}: {
+  onClick: () => void;
+  isActive?: boolean;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Button
+      type="button"
+      variant={isActive ? "secondary" : "ghost"}
+      size="sm"
+      onClick={onClick}
+      disabled={disabled}
+      className="h-8 w-8 p-0"
+    >
+      {children}
+    </Button>
+  );
+}
+
 export function RichTextEditor({
   content,
   onChange,
   editable = true,
 }: RichTextEditorProps) {
-  const turndownService = new TurndownService({
+  const turndownService = useMemo(() => new TurndownService({
     headingStyle: "atx",
     codeBlockStyle: "fenced",
-  });
+  }), []);
   const [linkPopoverOpen, setLinkPopoverOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
   const linkPopoverRef = useRef<HTMLDivElement>(null);
@@ -46,9 +71,9 @@ export function RichTextEditor({
   };
 
   // Convert HTML from Tiptap back to markdown
-  const htmlToMarkdown = (html: string): string => {
+  const htmlToMarkdown = useCallback((html: string): string => {
     return turndownService.turndown(html);
-  };
+  }, [turndownService]);
 
   const editor = useEditor({
     extensions: [
@@ -85,7 +110,7 @@ export function RichTextEditor({
     if (editor && content !== htmlToMarkdown(editor.getHTML())) {
       editor.commands.setContent(markdownToHtml(content));
     }
-  }, [content, editor]);
+  }, [content, editor, htmlToMarkdown]);
 
   // Close the link popover when clicking outside it
   useEffect(() => {
@@ -105,29 +130,6 @@ export function RichTextEditor({
   if (!editor) {
     return null;
   }
-
-  const ToolbarButton = ({
-    onClick,
-    isActive,
-    disabled,
-    children,
-  }: {
-    onClick: () => void;
-    isActive?: boolean;
-    disabled?: boolean;
-    children: React.ReactNode;
-  }) => (
-    <Button
-      type="button"
-      variant={isActive ? "secondary" : "ghost"}
-      size="sm"
-      onClick={onClick}
-      disabled={disabled}
-      className="h-8 w-8 p-0"
-    >
-      {children}
-    </Button>
-  );
 
   const openLinkPopover = () => {
     const existing = editor.getAttributes("link").href as string | undefined;

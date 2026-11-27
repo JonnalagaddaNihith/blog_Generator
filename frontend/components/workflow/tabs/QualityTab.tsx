@@ -10,7 +10,7 @@ import { RefreshCw } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
 const mdComponents = {
-  a: ({ node, ...props }: any) => (
+  a: ({ ...props }) => (
     <a
       {...props}
       target="_blank"

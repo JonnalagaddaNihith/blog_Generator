@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Company } from "@/lib/types";
 import { getCompanies, deleteCompany } from "@/lib/api";
@@ -20,11 +20,7 @@ export default function CompaniesPage() {
   const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
-    loadCompanies();
-  }, []);
-
-  const loadCompanies = async () => {
+  const loadCompanies = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -35,7 +31,14 @@ export default function CompaniesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadCompanies();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [loadCompanies]);
 
   const handleDelete = (companyId: number) => {
     const company = companies.find((c) => c.id === companyId);

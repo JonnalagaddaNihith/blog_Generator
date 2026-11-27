@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense, use, useEffect } from "react";
+import { useState, Suspense, use, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useWorkflowPolling } from "@/hooks/useWorkflowPolling";
 import { resumeWorkflow, getProject, getCompany } from "@/lib/api";
@@ -22,11 +22,7 @@ function ProjectWorkflowContent({ projectId }: { projectId: number }) {
   const [company, setCompany] = useState<Company | null>(null);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadProjectAndCompany();
-  }, [projectId]);
-
-  const loadProjectAndCompany = async () => {
+  const loadProjectAndCompany = useCallback(async () => {
     try {
       const projectData = await getProject(projectId);
       setProject(projectData);
@@ -37,7 +33,14 @@ function ProjectWorkflowContent({ projectId }: { projectId: number }) {
     } catch (err) {
       console.error("Failed to load project/company:", err);
     }
-  };
+  }, [projectId]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadProjectAndCompany();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [loadProjectAndCompany]);
 
   if (loading && !status) {
     return (

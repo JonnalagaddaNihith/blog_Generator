@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { WorkflowStatusResponse, Company, SqlWebsite } from "@/lib/types";
 import { exportPdf, exportDocx, exportTxt, exportHtml, exportMd, exportWordPress, getSqlWebsites, exportBlogToSql } from "@/lib/api";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -41,6 +42,7 @@ export function FinalReviewTabs({
   const [sqlWebsites, setSqlWebsites] = useState<SqlWebsite[]>([]);
   const [publishingSql, setPublishingSql] = useState<string | null>(null);
   const apiBase = process.env.NEXT_PUBLIC_API_URL;
+  const router = useRouter();
   const regenerationDisabled = submitting || is_complete;
 
   useEffect(() => {
@@ -100,7 +102,7 @@ export function FinalReviewTabs({
         description: `Please configure WordPress credentials for ${company?.name || "this company"} first.`,
         action: company ? {
           label: "Open Settings",
-          onClick: () => window.location.href = `/companies/${company.id}`,
+          onClick: () => router.push(`/companies/${company.id}`),
         } : undefined,
       });
       return;
@@ -138,7 +140,7 @@ export function FinalReviewTabs({
         description: "Connect and configure a table mapping for this website first.",
         action: company ? {
           label: "Open Settings",
-          onClick: () => window.location.href = `/companies/${company.id}`,
+          onClick: () => router.push(`/companies/${company.id}`),
         } : undefined,
       });
       return;
